@@ -71,7 +71,7 @@ RESTful endpoints for form functionality:
 ## File Structure
 
 ```
-ESA-Helpers/
+ESA-Helper-AZ/
 ├── app/                          # Flask application
 │   ├── __init__.py              # App factory
 │   ├── routes.py                # API endpoints (240+ lines)

@@ -389,7 +389,7 @@ except:
 ## File Organization Notes
 
 ```
-ESA-Helpers/
+ESA-Helper-AZ/
 ├── main.py                          # Entry point - start here
 ├── app/
 │   ├── __init__.py                 # Flask app factory (create_app())

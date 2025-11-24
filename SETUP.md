@@ -5,8 +5,8 @@ This guide walks you through setting up ESA Helper for the first time.
 ## Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/pmc2010/ESA-Helpers.git
-cd ESA-Helpers
+git clone https://github.com/pmc2010/ESA-Helper-AZ.git
+cd ESA-Helper-AZ
 ```
 
 ## Step 2: Install Dependencies
@@ -95,7 +95,7 @@ Follow the instructions in [QUICKSTART.md - Step 6](QUICKSTART.md#step-6-keep-th
 After following this guide, your project should look like:
 
 ```
-ESA-Helpers/
+ESA-Helper-AZ/
 ├── data/
 │   ├── students.json          ← Your student data
 │   ├── vendors.json           ← Your vendor/instructor data
@@ -143,7 +143,7 @@ uv sync  # or pip install flask selenium pillow
 Make sure you're in the project root directory:
 
 ```bash
-pwd  # Show current directory (should end with ESA-Helpers)
+pwd  # Show current directory (should end with ESA-Helper-AZ)
 ls data/students.sample.json  # Verify file exists
 ```
 

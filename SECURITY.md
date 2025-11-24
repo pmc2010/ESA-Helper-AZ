@@ -98,8 +98,8 @@ File browser could potentially be manipulated to access unintended directories.
 
 1. **Clone the repository separately**
    ```bash
-   git clone https://github.com/pmc2010/ESA-Helpers.git ESA-Helpers-Family-A
-   git clone https://github.com/pmc2010/ESA-Helpers.git ESA-Helpers-Family-B
+   git clone https://github.com/pmc2010/ESA-Helper-AZ.git ESA-Helper-AZ-Family-A
+   git clone https://github.com/pmc2010/ESA-Helper-AZ.git ESA-Helper-AZ-Family-B
    ```
 
 2. **Create separate data files**

@@ -134,10 +134,10 @@ The app should always be available for quick submissions. Follow the instruction
      <key>ProgramArguments</key>
      <array>
        <string>/usr/bin/python3</string>
-       <string>/path/to/ESA-Helpers/main.py</string>
+       <string>/path/to/ESA-Helper-AZ/main.py</string>
      </array>
      <key>WorkingDirectory</key>
-     <string>/path/to/ESA-Helpers</string>
+     <string>/path/to/ESA-Helper-AZ</string>
      <key>StandardOutPath</key>
      <string>/tmp/esa-helper.log</string>
      <key>StandardErrorPath</key>
@@ -150,7 +150,7 @@ The app should always be available for quick submissions. Follow the instruction
    </plist>
    ```
 
-   **Important:** Replace `/path/to/ESA-Helpers` with your actual project path (e.g., `/Users/petermandy/Documents/GitHub/ESA-Helpers`)
+   **Important:** Replace `/path/to/ESA-Helper-AZ` with your actual project path (e.g., `/Users/petermandy/Documents/GitHub/ESA-Helper-AZ`)
 
 3. **Load the LaunchAgent:**
 
@@ -194,7 +194,7 @@ launchctl unload ~/Library/LaunchAgents/com.esa-helper.plist
    - Action: **Start a program**
    - Program: `C:\path\to\python.exe` (e.g., `C:\Users\YourName\AppData\Local\Programs\Python\Python311\python.exe`)
    - Arguments: `main.py`
-   - Start in: `C:\path\to\ESA-Helpers` (your project directory)
+   - Start in: `C:\path\to\ESA-Helper-AZ` (your project directory)
    - Click **OK**
 
 5. **Set Conditions:**
@@ -231,8 +231,8 @@ launchctl unload ~/Library/LaunchAgents/com.esa-helper.plist
    [Service]
    Type=simple
    User=YOUR_USERNAME
-   WorkingDirectory=/path/to/ESA-Helpers
-   ExecStart=/usr/bin/python3 /path/to/ESA-Helpers/main.py
+   WorkingDirectory=/path/to/ESA-Helper-AZ
+   ExecStart=/usr/bin/python3 /path/to/ESA-Helper-AZ/main.py
    Restart=always
    RestartSec=10
    StandardOutput=journal
@@ -242,7 +242,7 @@ launchctl unload ~/Library/LaunchAgents/com.esa-helper.plist
    WantedBy=multi-user.target
    ```
 
-   Replace `YOUR_USERNAME` and `/path/to/ESA-Helpers` with your actual values.
+   Replace `YOUR_USERNAME` and `/path/to/ESA-Helper-AZ` with your actual values.
 
 3. **Enable and start the service:**
 
@@ -294,13 +294,13 @@ If the app crashes or stops, anyone can quickly restart it by clicking a bookmar
    @echo off
    taskkill /f /im python.exe >nul 2>&1
    timeout /t 2 /nobreak
-   cd C:\path\to\ESA-Helpers
+   cd C:\path\to\ESA-Helper-AZ
    start python main.py
    timeout /t 3 /nobreak
    start http://localhost:5000
    ```
 
-   Replace `C:\path\to\ESA-Helpers` with your actual project path.
+   Replace `C:\path\to\ESA-Helper-AZ` with your actual project path.
 
    **Note:** If you configured a custom port in `.env`, replace `5000` with your port number in the `start http://localhost:5000` line.
 

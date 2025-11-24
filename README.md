@@ -63,8 +63,8 @@ ESA Helper is a comprehensive web application that automates ESA (Education Savi
 
 5. **Download and Run**
    ```bash
-   git clone https://github.com/petermandy/ESA-Helpers.git
-   cd ESA-Helpers
+   git clone https://github.com/petermandy/ESA-Helper-AZ.git
+   cd ESA-Helper-AZ
    uv run main.py
    ```
    The app will open automatically in your browser at `http://127.0.0.1:5000`
@@ -150,7 +150,7 @@ ESA Helper is a comprehensive web application that automates ESA (Education Savi
 ## Project Structure
 
 ```
-ESA-Helpers/
+ESA-Helper-AZ/
 ├── app/
 │   ├── __init__.py                 # Flask app setup
 │   ├── routes.py                   # All API routes

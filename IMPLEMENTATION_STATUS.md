@@ -1,4 +1,4 @@
-# ESA-Helpers Implementation Status
+# ESA-Helper-AZ Implementation Status
 
 ## Overview
 The ClassWallet Selenium automation has been significantly improved with consistent logging, proper error handling, and working selectors for the main submission workflow.
@@ -129,12 +129,12 @@ The ClassWallet Selenium automation has been significantly improved with consist
 1. **PO and Comment Page Selectors** - NEEDS HTML
    - Current selectors are placeholders
    - User must navigate to this page and provide HTML
-   - File: `/Users/petermandy/Documents/GitHub/ESA-Helpers/app/classwallet.py` lines 414-428
+   - File: `/Users/petermandy/Documents/GitHub/ESA-Helper-AZ/app/classwallet.py` lines 414-428
 
 2. **Submit Button Selectors** - NEEDS HTML
    - Current selectors use cascading fallback strategy
    - User must navigate to final review page and provide HTML
-   - File: `/Users/petermandy/Documents/GitHub/ESA-Helpers/app/classwallet.py` lines 472-487
+   - File: `/Users/petermandy/Documents/GitHub/ESA-Helper-AZ/app/classwallet.py` lines 472-487
 
 ### 🟡 Testing Required
 
@@ -220,7 +220,7 @@ The ClassWallet Selenium automation has been significantly improved with consist
 ## File Structure
 
 ```
-ESA-Helpers/
+ESA-Helper-AZ/
 ├── app/
 │   ├── __init__.py           (Flask app factory)
 │   ├── classwallet.py         (Selenium automation - MAIN FOCUS)
