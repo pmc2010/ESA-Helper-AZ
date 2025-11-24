@@ -25,7 +25,7 @@ jobs:
       uses: astral-sh/setup-uv@v2
 
     - name: Install dependencies
-      run: uv sync
+      run: uv sync --all-extras
 
     - name: Lint with Python syntax check
       run: python3 -m py_compile app/*.py
