@@ -64,8 +64,12 @@ def main():
         chrome_thread = threading.Thread(target=open_chrome, daemon=True)
         chrome_thread.start()
 
-    # Start Flask development server
-    app.run(debug=True, host=host, port=port, use_reloader=True)
+    # Start Flask development server (debug only if FLASK_ENV or DEBUG env vars indicate development)
+    debug_mode = (
+        os.environ.get('FLASK_ENV', '').lower() == 'development' or
+        os.environ.get('DEBUG', '0') == '1'
+    )
+    app.run(debug=debug_mode, host=host, port=port, use_reloader=True)
 
 
 if __name__ == '__main__':
