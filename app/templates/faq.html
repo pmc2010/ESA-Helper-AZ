@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - FAQ</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .faq-container {
+            max-width: 900px;
+            margin-top: 2rem;
+        }
+        .faq-section {
+            margin-bottom: 2rem;
+        }
+        .faq-section h3 {
+            border-bottom: 3px solid #0d6efd;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .faq-item {
+            margin-bottom: 1rem;
+        }
+        .faq-question {
+            cursor: pointer;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-left: 4px solid #0d6efd;
+            font-weight: 600;
+            user-select: none;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .faq-question:hover {
+            background-color: #e9ecef;
+        }
+        .faq-answer {
+            display: none;
+            padding: 1rem;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+            line-height: 1.6;
+        }
+        .faq-answer.show {
+            display: block;
+        }
+        .faq-answer code {
+            background-color: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        .faq-answer ul, .faq-answer ol {
+            margin-bottom: 0.5rem;
+            padding-left: 1.5rem;
+        }
+        .faq-answer li {
+            margin-bottom: 0.25rem;
+        }
+        .search-box {
+            margin-bottom: 2rem;
+        }
+        .faq-toc {
+            position: sticky;
+            top: 100px;
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            border-left: 4px solid #0d6efd;
+        }
+        .faq-toc a {
+            display: block;
+            padding: 0.25rem 0;
+            text-decoration: none;
+            color: #0d6efd;
+        }
+        .faq-toc a:hover {
+            text-decoration: underline;
+        }
+        .highlight-match {
+            background-color: #fff3cd;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">FAQ</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container faq-container">
+        <div class="row">
+            <div class="col-lg-3 d-none d-lg-block">
+                <div class="faq-toc">
+                    <h6>Sections</h6>
+                    <a href="#common-problems">Common Problems</a>
+                    <a href="#files-documents">Files & Documents</a>
+                    <a href="#templates">Templates</a>
+                    <a href="#direct-pay">Direct Pay</a>
+                    <a href="#invoices">Invoices</a>
+                    <a href="#account-data">Account & Data</a>
+                    <a href="#general">General</a>
+                </div>
+            </div>
+
+            <div class="col-lg-9">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h2 class="mb-0">Frequently Asked Questions</h2>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            Can't find what you're looking for? Use <kbd>Ctrl+F</kbd> (or <kbd>Cmd+F</kbd> on Mac) to search this page, or visit the
+                            <a href="/requirements">Requirements & Setup</a> page for installation help.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Search Box -->
+                <div class="search-box">
+                    <input type="text" class="form-control form-control-lg" id="faqSearch"
+                        placeholder="🔍 Search FAQ... (or use Ctrl+F)">
+                </div>
+
+                <!-- COMMON PROBLEMS -->
+                <div class="faq-section" id="common-problems">
+                    <h3>🚨 Common Problems & Troubleshooting</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            My submission failed. What should I do?
+                        </div>
+                        <div class="faq-answer">
+                            <p>Here are the steps to troubleshoot a failed submission:</p>
+                            <ol>
+                                <li><strong>Check the error message</strong> - The app shows specific errors about what went wrong (login failed, form not found, etc.)</li>
+                                <li><strong>Review automation logs</strong> - Go to Settings → "Automation Logs" to see detailed step-by-step logs. Look for the ERROR lines</li>
+                                <li><strong>Verify your credentials</strong> - Make sure your ClassWallet email and password are correct (try logging in manually on ClassWallet.com)</li>
+                                <li><strong>Check ClassWallet website</strong> - ClassWallet may be down for maintenance. Try accessing it directly</li>
+                                <li><strong>Review required fields</strong> - Ensure student folder exists, files are in correct format, and all required documents are uploaded</li>
+                                <li><strong>Share the logs</strong> - If the problem persists, download the log file (Settings → Automation Logs → Download) and share it with support</li>
+                            </ol>
+                            <p class="mb-0"><small class="text-muted">Logs contain timestamps and step-by-step information that helps identify the exact problem.</small></p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            The browser window closed. Did my submission go through?
+                        </div>
+                        <div class="faq-answer">
+                            <p>The browser closing <strong>does not mean your submission was lost</strong>. Check these:</p>
+                            <ol>
+                                <li><strong>Check ClassWallet manually</strong> - Log in to ClassWallet.com and look for your submission in the recent activity/submitted forms</li>
+                                <li><strong>Check submission history</strong> - Go to Settings → "Submission History" to see if it was recorded as successful</li>
+                                <li><strong>Check the logs</strong> - Go to Settings → "Automation Logs" and look for the most recent log. Search for "Submit" to see if the submit step completed</li>
+                            </ol>
+                            <p class="mb-0"><strong>Important:</strong> The browser window closing often happens near the end of the process. Usually the submission was either successful or failed with a clear error. Check the logs first!</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            I got an error about a missing selector or timeout. What does this mean?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Selector errors</strong> usually mean ClassWallet's website layout changed:</p>
+                            <ul>
+                                <li>ClassWallet updates their website occasionally, which breaks the automation selectors</li>
+                                <li>The form fields the app is looking for no longer exist in the expected location</li>
+                                <li>This requires an update to the app to fix</li>
+                            </ul>
+                            <p><strong>What to do:</strong></p>
+                            <ol>
+                                <li>Try submitting manually through ClassWallet.com directly</li>
+                                <li>Download the log file and note what step failed</li>
+                                <li>Contact support with the error message and log file - this helps identify needed updates</li>
+                            </ol>
+                            <p class="mb-0"><small class="text-muted">Timeout errors usually mean the page is taking longer to load than expected. Try again, or disable auto-submit in settings and submit manually through the ClassWallet form.</small></p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I know if my files were actually uploaded?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Check the logs:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Automation Logs"</li>
+                                <li>Find the most recent log for that date</li>
+                                <li>Click "View" and search for "Files uploaded successfully"</li>
+                                <li>If you see ✓ checkmarks next to each file, they were uploaded</li>
+                            </ol>
+                            <p><strong>Manual verification:</strong></p>
+                            <ol>
+                                <li>Log in to ClassWallet.com</li>
+                                <li>Find your submission form</li>
+                                <li>Check the file upload section to see which files are present</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            ClassWallet rejected my submission. What files do I need?
+                        </div>
+                        <div class="faq-answer">
+                            <p>Different expense categories require different documents. The app shows you which are required when you select a category:</p>
+                            <ul>
+                                <li><strong>Tutoring (Individual):</strong> Receipt + Invoice + Attestation</li>
+                                <li><strong>Tutoring (Facility):</strong> Receipt + Invoice</li>
+                                <li><strong>Curriculum:</strong> Receipt only</li>
+                                <li><strong>Supplemental Materials:</strong> Receipt + Curriculum</li>
+                                <li><strong>Computer Hardware:</strong> Receipt only</li>
+                            </ul>
+                            <p><strong>If rejected:</strong></p>
+                            <ul>
+                                <li>Check which files are actually required in ClassWallet (some may vary)</li>
+                                <li>Ensure files are in supported formats (PDF, JPG, PNG)</li>
+                                <li>Try uploading one file at a time to identify which one is problematic</li>
+                                <li>Check file size (usually &lt;10 MB per file)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILES & DOCUMENTS -->
+                <div class="faq-section" id="files-documents">
+                    <h3>📄 Files & Documents</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What file formats are supported?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Supported formats:</strong></p>
+                            <ul>
+                                <li>PDF (.pdf) - Recommended for official documents</li>
+                                <li>JPEG (.jpg, .jpeg) - Photos of receipts</li>
+                                <li>PNG (.png) - Screenshots or images</li>
+                            </ul>
+                            <p><strong>Not supported:</strong></p>
+                            <ul>
+                                <li>Word documents (.docx, .doc)</li>
+                                <li>Excel files (.xlsx, .xls)</li>
+                                <li>Plain text (.txt)</li>
+                            </ul>
+                            <p class="mb-0"><strong>Tip:</strong> If you have a Word or Excel document, print it to PDF first or take a screenshot and save as PNG/JPG.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What's the maximum file size?
+                        </div>
+                        <div class="faq-answer">
+                            <p>ClassWallet typically allows files up to <strong>10 MB per file</strong>. However:</p>
+                            <ul>
+                                <li>Receipts/photos should be <strong>&lt; 2 MB</strong> (phone photos are usually 2-5 MB)</li>
+                                <li>If you have a large PDF, try compressing it or splitting into multiple files</li>
+                                <li>The app has a PDF splitter tool (go to Help → Data Backup & Migration, then look for PDF splitting) if you have a multi-page receipt</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Can I upload multiple receipts for one submission?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Yes!</strong> The app supports uploading multiple files of the same type.</p>
+                            <ul>
+                                <li>Click the file browse button and select multiple files at once (Ctrl+Click or Cmd+Click)</li>
+                                <li>Or click the button multiple times and add more files</li>
+                                <li>Each file will be uploaded separately</li>
+                            </ul>
+                            <p><strong>Example:</strong> If you have a lesson with two receipts (payment split between two instructors), you can upload both receipts. Just make sure the total amount in the form matches the combined receipts.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Where are my uploaded files stored?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Files are stored in ClassWallet, not on your computer.</strong> Once you upload them through the app, they're attached to your ClassWallet submission form.</p>
+                            <p><strong>To access them:</strong></p>
+                            <ol>
+                                <li>Log in to ClassWallet.com</li>
+                                <li>Find the submitted form</li>
+                                <li>The files should be visible in the submission details</li>
+                            </ol>
+                            <p class="mb-0"><strong>Keep your own copies:</strong> Don't delete the original files from your computer until you confirm ClassWallet received them successfully.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I prepare documents (receipts, attestations, invoices)?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Receipts:</strong></p>
+                            <ul>
+                                <li>Take a clear photo with your phone (make sure date is visible)</li>
+                                <li>Or use phone banking app to screenshot the payment receipt</li>
+                                <li>Ensure all important details are visible (amount, date, vendor, student name, items purchased)</li>
+                            </ul>
+                            <p><strong>Invoices:</strong></p>
+                            <ul>
+                                <li>Can be generated automatically using the app (click "Request Invoice" on the form)</li>
+                                <li>Or provide an invoice from the vendor/instructor</li>
+                                <li>Must show itemized charges</li>
+                            </ul>
+                            <p><strong>Attestations (for individual tutoring):</strong></p>
+                            <ul>
+                                <li>Ask your tutor/instructor to provide you with a completed attestation form (see the <a href="https://www.azed.gov/esa/parent-handbook" target="_blank">ESA Parent Handbook</a></li>)
+                                <li>Must be a format accepted by ClassWallet (e.g. pdf, jpeg, png)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TEMPLATES -->
+                <div class="faq-section" id="templates">
+                    <h3>📋 Templates & Reimbursement Forms</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What are templates and why would I use them?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Templates save your time</strong> by remembering form fields for recurring expenses:</p>
+                            <ul>
+                                <li>Select student, vendor, amount, and category</li>
+                                <li>Choose file locations</li>
+                                <li>Click "Save as Template"</li>
+                                <li>Next time, select the template and the form auto-fills</li>
+                            </ul>
+                            <p><strong>Example:</strong> Your child has weekly piano lessons with the same teacher, same amount, same documents location. Create a template once, then use it every week - just click a button instead of re-entering everything.</p>
+                            <p class="mb-0"><strong>Good use cases:</strong> Weekly/monthly recurring expenses from the same vendor (tutoring, music lessons, sports)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I create and use a template?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Creating a template:</strong></p>
+                            <ol>
+                                <li>Fill out the reimbursement form as normal (student, vendor, amount, files, category, etc.)</li>
+                                <li>Instead of submitting, click the "Save as Template" button</li>
+                                <li>Give it a name (e.g., "Piano Lessons - Weekly")</li>
+                                <li>Click Save</li>
+                            </ol>
+                            <p><strong>Using a template:</strong></p>
+                            <ol>
+                                <li>On the main form, find the "Template" dropdown</li>
+                                <li>Select your saved template</li>
+                                <li>Form auto-fills with saved values</li>
+                                <li>Adjust any values that changed (date, files, comment)</li>
+                                <li>Submit as normal</li>
+                            </ol>
+                            <p><strong>Manage templates:</strong> Go to Settings → "Manage Templates" to view, edit, or delete saved templates</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Can I copy a template from one student to another?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Not directly</strong> in the current version, but you can:</p>
+                            <ol>
+                                <li>Load the template from the first student</li>
+                                <li>Change the student to the second student</li>
+                                <li>Update file paths to point to the second student's folder</li>
+                                <li>Save as a new template for the second student</li>
+                            </ol>
+                            <p class="mb-0"><strong>Tip:</strong> Organize your student folders the same way so you can quickly change paths (e.g., both have <code>/Tutoring/Piano/</code>)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What happens if I delete a template?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Deleting a template is safe.</strong> It only removes the saved form configuration, not your files or data:</p>
+                            <ul>
+                                <li>The file paths you saved are not deleted</li>
+                                <li>Past submissions are not affected</li>
+                                <li>You can create the template again if needed</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Can I use {yyyy-mm-dd} format in the comment field?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Yes!</strong> The app supports date formatting in comments and PO numbers:</p>
+                            <ul>
+                                <li><code>{yyyy-mm-dd}</code> → 2025-11-15</li>
+                                <li><code>{mm-dd}</code> → 11-15</li>
+                                <li><code>{dddd}</code> → Friday (day of week)</li>
+                            </ul>
+                            <p><strong>Example:</strong> Template comment "Piano lesson {yyyy-mm-dd}" becomes "Piano lesson 2025-11-15" when submitted.</p>
+                            <p class="mb-0">This is useful for automatically dating submissions or PO numbers.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DIRECT PAY -->
+                <div class="faq-section" id="direct-pay">
+                    <h3>💳 Direct Pay</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            When should I use Direct Pay instead of Reimbursement?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Use Reimbursement when:</strong> You pay the vendor/instructor yourself, then submit for reimbursement</p>
+                            <p><strong>Use Direct Pay when:</strong> You want ESA to pay the vendor directly (the vendor must be enrolled in ClassWallet)</p>
+                            <p><strong>Key differences:</strong></p>
+                            <ul>
+                                <li><strong>Reimbursement:</strong> You pay → You submit receipt + invoice → ESA reimburses you</li>
+                                <li><strong>Direct Pay:</strong> ESA pays vendor directly → You submit invoice → Vendor receives payment</li>
+                            </ul>
+                            <p class="mb-0"><strong>When to use each:</strong> Ask your school/ESA administrator which method they prefer for your specific vendor or expense type.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What's a ClassWallet Search Term and why does it matter?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>ClassWallet Search Term</strong> is the name the app uses to find your vendor in ClassWallet's system.</p>
+                            <p><strong>Why it matters:</strong> When you select Direct Pay, the app searches for the vendor by this exact name. If it doesn't match, the automation fails.</p>
+                            <p><strong>Example:</strong></p>
+                            <ul>
+                                <li>Your vendor is named "Piano City Music Studio" in your vendor list</li>
+                                <li>But in ClassWallet, they're listed as "Piano City Music"</li>
+                                <li>You'd set Search Term to "Piano City Music"</li>
+                                <li>Now Direct Pay finds them correctly</li>
+                            </ul>
+                            <p><strong>How to set it:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Manage Vendors"</li>
+                                <li>Edit the vendor</li>
+                                <li>Find the "ClassWallet Search Term" field</li>
+                                <li>Enter the exact name as it appears in ClassWallet</li>
+                            </ol>
+                            <p class="mb-0"><strong>Tip:</strong> Log into ClassWallet and search for your vendor to see the exact name they use.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What if the vendor isn't found in ClassWallet?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>If the search fails, the app will show an error.</strong> This usually means:</p>
+                            <ol>
+                                <li><strong>Vendor not enrolled:</strong> The vendor isn't registered in ClassWallet yet (ask your school)</li>
+                                <li><strong>Wrong search term:</strong> The name doesn't match exactly (check spelling, capitalization)</li>
+                                <li><strong>Recent enrollment:</strong> Vendor just enrolled and isn't searchable yet (wait a few days)</li>
+                            </ol>
+                            <p><strong>What to do:</strong></p>
+                            <ul>
+                                <li>Try logging into ClassWallet manually and search for the vendor to confirm they exist</li>
+                                <li>Update the ClassWallet Search Term to match exactly what ClassWallet shows</li>
+                                <li>If vendor doesn't exist, contact your school to enroll them</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Does Direct Pay work the same way as Reimbursement?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Similar but different:</strong></p>
+                            <ul>
+                                <li>Both require the same files (receipt, invoice, etc.) depending on category</li>
+                                <li>Direct Pay searches for vendor by name instead of asking you to type it</li>
+                                <li>Direct Pay stops at review page by default (you manually submit or auto-submit if enabled)</li>
+                                <li>Reimbursement submits automatically (unless you disable auto-submit)</li>
+                            </ul>
+                            <p><strong>Files needed for Direct Pay:</strong> Usually just <strong>Invoice only</strong> (no receipt needed since you're not paying out-of-pocket)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INVOICES -->
+                <div class="faq-section" id="invoices">
+                    <h3>📊 Invoice Generation</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Why would I generate an invoice?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>You generate an invoice to:</strong></p>
+                            <ul>
+                                <li>Have a professional document to send with your submission</li>
+                                <li>Create an itemized record of what you're paying for</li>
+                                <li>Provide a formal document the vendor or school might require</li>
+                            </ul>
+                            <p><strong>When to generate:</strong></p>
+                            <ul>
+                                <li>When the vendor didn't provide an invoice</li>
+                                <li>When you want an official-looking document with your ESA info</li>
+                                <li>For Direct Pay submissions (usually required)</li>
+                            </ul>
+                            <p class="mb-0"><strong>You don't have to if:</strong> The vendor already provided a proper invoice (from a business, tutoring company, etc.)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Do I have to use an invoice?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>It depends on the expense category and your school's requirements:</strong></p>
+                            <ul>
+                                <li>Some categories always require an invoice</li>
+                                <li>Some accept either the vendor's invoice OR a generated one</li>
+                                <li>Some don't require an invoice at all</li>
+                            </ul>
+                            <p><strong>Check with your school:</strong> Different schools have different policies. When in doubt, submitting an invoice is safer than not submitting one.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I generate an invoice?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Quick method:</strong></p>
+                            <ol>
+                                <li>Fill out the reimbursement form (student, vendor, amount, category)</li>
+                                <li>Click the "Request Invoice" button</li>
+                                <li>Choose to download as Excel or PDF</li>
+                                <li>The invoice file is created with student, vendor, and amount info</li>
+                            </ol>
+                            <p><strong>What's included:</strong> The generated invoice shows date, student name, vendor name, itemized charges, and total amount.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Can I customize the invoice template?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Limited customization in the current version.</strong> The invoice uses a built-in template that shows:</p>
+                            <ul>
+                                <li>Student name and address</li>
+                                <li>Vendor name and address</li>
+                                <li>Description of service</li>
+                                <li>Amount and date</li>
+                            </ul>
+                            <p><strong>If you need customization:</strong> You can generate the invoice, then edit it in Excel (if you downloaded .xlsx) or take it as a starting point and create your own in Word/Google Docs.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Where are generated invoices saved?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Generated invoices are:</strong></p>
+                            <ul>
+                                <li>Downloaded to your computer's Downloads folder</li>
+                                <li>Named with student name, date, and vendor name</li>
+                                <li>Saved as .xlsx (Excel) by default, or .pdf if you chose that option</li>
+                            </ul>
+                            <p><strong>After downloading:</strong> Move it to your student's folder or the vendor folder so it's with your other documents.</p>
+                            <p class="mb-0"><strong>Tip:</strong> The invoice is a temporary file. The app doesn't keep copies, so save it to your folder immediately if you want to keep it.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ACCOUNT & DATA -->
+                <div class="faq-section" id="account-data">
+                    <h3>🔐 Account & Data</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Can I use this app for multiple students?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Absolutely!</strong> The app supports multiple students:</p>
+                            <ol>
+                                <li>Go to Settings → "Manage Students"</li>
+                                <li>Add each child's profile (name, address, folder location)</li>
+                                <li>On the main form, select which student the reimbursement is for</li>
+                                <li>Create separate templates for each student's common expenses if desired</li>
+                            </ol>
+                            <p class="mb-0"><strong>Tip:</strong> Organize your folders by student to keep files organized (e.g., /ESA/student-1/, /ESA/student-2/, etc.)</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I manage vendors and edit their information?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>To add a vendor:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Manage Vendors"</li>
+                                <li>Click "+ Add New Vendor"</li>
+                                <li>Fill in: Name, Business Name, Address, Email, Tax Rate</li>
+                                <li>For Direct Pay, add the ClassWallet Search Term</li>
+                                <li>Click Save</li>
+                            </ol>
+                            <p><strong>To edit a vendor:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Manage Vendors"</li>
+                                <li>Click the vendor's name or the Edit button</li>
+                                <li>Update any fields</li>
+                                <li>Click Save</li>
+                            </ol>
+                            <p class="mb-0"><strong>Don't have to add all upfront:</strong> You can add vendors as you need them.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I back up my data and transfer to a new computer?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Back up your data:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Data Backup & Migration"</li>
+                                <li>Click "Download Backup File"</li>
+                                <li>A JSON file downloads with all your students, vendors, and templates</li>
+                                <li>Save it in a safe location (cloud storage, email, external drive)</li>
+                            </ol>
+                            <p><strong>Restore on a new computer:</strong></p>
+                            <ol>
+                                <li>Install the ESA Helper app on the new computer</li>
+                                <li>Go to Settings → "Data Backup & Migration"</li>
+                                <li>Upload your backup file</li>
+                                <li>Select which data to restore (students, vendors, templates, etc.)</li>
+                                <li>Click Import</li>
+                            </ol>
+                            <p class="mb-0"><strong>Important:</strong> Your ClassWallet credentials are NOT backed up (for security). You'll need to re-enter them on the new computer.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How do I reset/clear all my data?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Important:</strong> There's no built-in reset feature. If you want to start fresh:</p>
+                            <ol>
+                                <li>Backup your current data first (see question above)</li>
+                                <li>Close the app</li>
+                                <li>Navigate to your user documents folder and find the ESA Helper directory</li>
+                                <li>Delete the <code>data/</code> folder</li>
+                                <li>Restart the app (it will recreate the folder with empty data)</li>
+                            </ol>
+                            <p class="mb-0"><strong>Don't delete credentials:</strong> Keep your <code>config.json</code> file to preserve your ClassWallet email and password.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GENERAL -->
+                <div class="faq-section" id="general">
+                    <h3>❓ General Questions</h3>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Is this tool safe to use? Where is my data stored?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Data storage:</strong></p>
+                            <ul>
+                                <li>All your data is stored locally on your computer in JSON files</li>
+                                <li>Nothing is uploaded to external servers</li>
+                                <li>Your ClassWallet credentials are stored locally (plaintext, so keep your computer secure)</li>
+                            </ul>
+                            <p><strong>Security notes:</strong></p>
+                            <ul>
+                                <li>This is designed for personal/family use on a trusted computer</li>
+                                <li>Don't use on shared computers or public WiFi</li>
+                                <li>If sharing with family/friends, be aware they can see all your data</li>
+                            </ul>
+                            <p class="mb-0">See the <a href="/requirements">Requirements & Setup</a> page for more security information.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            How fast is the automation? Can I run multiple submissions at once?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>Automation time breakdown:</strong> The automation itself is blazingly fast!</p>
+                            <ul>
+                                <li>Login to ClassWallet: ~15 seconds</li>
+                                <li>Student selection: ~3-4 seconds</li>
+                                <li>Fill store name & amount: ~6-7 seconds</li>
+                                <li>Upload files: ~4 seconds</li>
+                                <li>Select expense category: ~10-15 seconds</li>
+                                <li>Fill PO number & comment: ~8-9 seconds</li>
+                                <li><strong>Automation time only: ~60 seconds (under 1 minute!)</strong></li>
+                            </ul>
+                            <p><strong>Total submission time (user + automation):</strong></p>
+                            <ul>
+                                <li><strong>With a template:</strong> ~2 minutes (template pre-fills most fields, you just upload files and click submit)</li>
+                                <li><strong>Without a template:</strong> ~6-7 minutes (need to manually select vendor, enter amount, add comment, then upload and submit)</li>
+                            </ul>
+                            <p><strong>vs Manual form-filling:</strong> Typically takes 15-35 minutes for the same task. This automation saves 10-30 minutes per submission!</p>
+                            <p><strong>Multiple submissions:</strong> <strong>Don't run multiple at once</strong></p>
+                            <ul>
+                                <li>The app controls a web browser and can only do one thing at a time</li>
+                                <li>Running multiple submissions simultaneously will cause both to fail</li>
+                                <li>Submit one, wait for it to complete, then start the next</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            What do I need to know before using this app?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>System requirements:</strong></p>
+                            <ul>
+                                <li>Windows, Mac, or Linux computer</li>
+                                <li>Google Chrome/Chromium web browser</li>
+                                <li>Python 3.11+ (usually pre-installed or easy to install)</li>
+                                <li>Stable internet connection</li>
+                            </ul>
+                            <p><strong>Before you start:</strong></p>
+                            <ul>
+                                <li>Have your ClassWallet credentials ready (email and password)</li>
+                                <li>Set up a folder structure for each student's documents</li>
+                                <li>Test with a small submission first, not a large expense</li>
+                                <li>Always verify successful submissions in ClassWallet</li>
+                            </ul>
+                            <p class="mb-0">See the <a href="/requirements">Requirements & Setup</a> page for detailed installation instructions.</p>
+                        </div>
+                    </div>
+
+                    <div class="faq-item">
+                        <div class="faq-question" onclick="toggleFaq(this)">
+                            Still need help? How do I contact support?
+                        </div>
+                        <div class="faq-answer">
+                            <p><strong>For technical issues:</strong></p>
+                            <ol>
+                                <li>Go to Settings → "Automation Logs"</li>
+                                <li>Find the log file from when the error occurred</li>
+                                <li>Download the log file</li>
+                                <li>Contact support with the log file and description of the problem</li>
+                            </ol>
+                            <p><strong>For questions about ClassWallet:</strong></p>
+                            <ul>
+                                <li>Check your school's ESA documentation</li>
+                                <li>Contact your school's ESA administrator</li>
+                                <li>Log into ClassWallet.com and use their built-in help</li>
+                            </ul>
+                            <p class="mb-0"><strong>For feature requests or bugs:</strong> The more detailed information you provide, the better we can help. Include log files, screenshots, and exact steps to reproduce the issue.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="card border-secondary mt-5">
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            💡 <strong>Tip:</strong> Use <kbd>Ctrl+F</kbd> (or <kbd>Cmd+F</kbd> on Mac) to search this page. Also check the
+                            <a href="/requirements">Requirements & Setup</a> page for installation and system troubleshooting.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="text-center my-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleFaq(element) {
+            const answer = element.nextElementSibling;
+            answer.classList.toggle('show');
+
+            // Scroll into view if opening
+            if (answer.classList.contains('show')) {
+                setTimeout(() => {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 100);
+            }
+        }
+
+        // Search functionality
+        const faqSearch = document.getElementById('faqSearch');
+        faqSearch.addEventListener('keyup', function() {
+            const searchText = this.value.toLowerCase();
+            const faqItems = document.querySelectorAll('.faq-item');
+
+            if (searchText === '') {
+                // Clear search - hide all answers
+                faqItems.forEach(item => {
+                    item.style.display = 'block';
+                    item.querySelector('.faq-answer').classList.remove('show');
+                });
+                return;
+            }
+
+            faqItems.forEach(item => {
+                const question = item.querySelector('.faq-question').textContent.toLowerCase();
+                const answer = item.querySelector('.faq-answer').textContent.toLowerCase();
+
+                if (question.includes(searchText) || answer.includes(searchText)) {
+                    item.style.display = 'block';
+                    // Auto-open matching answers
+                    item.querySelector('.faq-answer').classList.add('show');
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        });
+
+        // Allow keyboard navigation with Enter on questions
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && document.activeElement.classList.contains('faq-question')) {
+                document.activeElement.click();
+            }
+        });
+    </script>
+</body>
+</html>

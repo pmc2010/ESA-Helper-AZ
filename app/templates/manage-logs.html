@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Automation Logs</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .manage-container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .btn-group-custom {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .log-date {
+            font-family: monospace;
+            font-weight: 600;
+        }
+        .log-size {
+            text-align: right;
+            font-family: monospace;
+        }
+        .log-meta {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .cleanup-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .log-content-modal {
+            max-height: 600px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            font-family: monospace;
+            font-size: 0.85rem;
+            padding: 1rem;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Automation Logs</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container manage-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Automation Logs</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            View, download, and manage automation logs from ClassWallet submissions. Logs are organized by date and can be
+                            shared for troubleshooting.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Cleanup Controls -->
+                <div class="card border-info mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Log Management</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="cleanup-controls">
+                            <button type="button" class="btn btn-warning" onclick="deleteOldLogs(7)">
+                                🗑️ Delete Logs Older Than 7 Days
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="deleteAllLogs()">
+                                🗑️ Delete All Logs
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="refreshLogList()">
+                                🔄 Refresh List
+                            </button>
+                        </div>
+                        <div id="cleanupStatus" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Logs Table -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Automation Logs</h5>
+                            <span class="badge bg-secondary" id="logCountBadge">0 files</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>File</th>
+                                        <th class="text-end">Size</th>
+                                        <th class="text-end">Lines</th>
+                                        <th style="width: 200px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsTableBody">
+                                    <tr id="loadingRow">
+                                        <td colspan="5" class="text-center py-4">
+                                            <div class="spinner-border spinner-border-sm" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            Loading logs...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Info -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Storage Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-2">
+                                    <strong>Total Logs:</strong>
+                                    <span id="totalLogs" class="badge bg-primary">0</span>
+                                </p>
+                                <p class="mb-0">
+                                    <strong>Total Size:</strong>
+                                    <span id="totalSize" class="badge bg-info">0 MB</span>
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-2">
+                                    <strong>Storage Location:</strong><br>
+                                    <code style="font-size: 0.85rem;">logs/automation_YYYYMMDD.log</code>
+                                </p>
+                                <p class="text-muted small mb-0">
+                                    All logs for the same date are combined in one file.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Information Section -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">About Automation Logs</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>What's in these logs:</h6>
+                        <ul class="mb-3 small">
+                            <li>ClassWallet login activities</li>
+                            <li>Student and vendor selection steps</li>
+                            <li>File upload operations</li>
+                            <li>Form filling and submission steps</li>
+                            <li>Any errors encountered during automation</li>
+                            <li>Timestamps for each operation</li>
+                        </ul>
+
+                        <h6>Sharing logs for support:</h6>
+                        <p class="small mb-0">
+                            If you encounter an error, you can view, download, or copy the log file to share with support.
+                            The logs contain timestamps and detailed step-by-step information that helps diagnose issues.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Log Modal -->
+    <div class="modal fade" id="viewLogModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">View Log: <code id="viewLogName"></code></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="log-content-modal" id="logContent"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-primary" onclick="copyLogContent()">
+                        📋 Copy to Clipboard
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="downloadCurrentLog()">
+                        📥 Download
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Log Modal -->
+    <div class="modal fade" id="emailLogModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Share Log via Email</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="emailLogForm">
+                        <div class="mb-3">
+                            <label for="logNameField" class="form-label">Log File</label>
+                            <input type="text" class="form-control" id="logNameField" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="recipientEmail" class="form-label">Recipient Email</label>
+                            <input type="email" class="form-control" id="recipientEmail" required
+                                placeholder="support@example.com">
+                            <small class="text-muted">Email address to send the log to</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="emailMessage" class="form-label">Message (Optional)</label>
+                            <textarea class="form-control" id="emailMessage" rows="3"
+                                placeholder="Describe the issue you encountered..."></textarea>
+                        </div>
+                        <div id="emailStatus" style="display: none;"></div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="sendLogEmail()">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentLogName = null;
+        let currentLogContent = null;
+        let allLogs = [];
+
+        function loadLogList() {
+            const tbody = document.getElementById('logsTableBody');
+            tbody.innerHTML = '<tr id="loadingRow"><td colspan="5" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div> Loading logs...</td></tr>';
+
+            fetch('/api/logs')
+                .then(response => response.json())
+                .then(logs => {
+                    allLogs = logs;
+                    displayLogs(logs);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading logs</td></tr>';
+                });
+        }
+
+        function displayLogs(logs) {
+            const tbody = document.getElementById('logsTableBody');
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No automation logs found</td></tr>';
+                document.getElementById('logCountBadge').textContent = '0 files';
+                document.getElementById('totalLogs').textContent = '0';
+                document.getElementById('totalSize').textContent = '0 MB';
+                return;
+            }
+
+            let totalSize = 0;
+            tbody.innerHTML = logs.map(log => {
+                totalSize += log.size;
+                const date = formatDate(log.date);
+                const sizeKb = log.size_kb;
+                return `
+                    <tr>
+                        <td><span class="log-date">${date}</span></td>
+                        <td><code>${log.name}</code></td>
+                        <td class="log-size">${sizeKb} KB</td>
+                        <td class="text-end">${log.line_count}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewLog('${log.name}')">👁️ View</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="downloadLog('${log.name}')">📥 Download</button>
+                            <button class="btn btn-sm btn-outline-info" onclick="openEmailModal('${log.name}')">📧 Email</button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteLog('${log.name}')">🗑️ Delete</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            document.getElementById('logCountBadge').textContent = `${logs.length} files`;
+            document.getElementById('totalLogs').textContent = logs.length;
+            document.getElementById('totalSize').textContent = (totalSize / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function formatDate(dateStr) {
+            // dateStr is YYYYMMDD
+            if (dateStr.length === 8) {
+                return dateStr.substring(0, 4) + '-' + dateStr.substring(4, 6) + '-' + dateStr.substring(6, 8);
+            }
+            return dateStr;
+        }
+
+        function viewLog(logName) {
+            fetch(`/api/logs/${logName}`)
+                .then(response => response.json())
+                .then(data => {
+                    currentLogName = logName;
+                    currentLogContent = data.content;
+                    document.getElementById('viewLogName').textContent = logName;
+                    document.getElementById('logContent').textContent = data.content;
+                    new bootstrap.Modal(document.getElementById('viewLogModal')).show();
+                })
+                .catch(error => {
+                    alert('Error loading log: ' + error.message);
+                });
+        }
+
+        function downloadLog(logName) {
+            fetch(`/api/logs/${logName}`)
+                .then(response => response.json())
+                .then(data => {
+                    const element = document.createElement('a');
+                    element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(data.content));
+                    element.setAttribute('download', logName);
+                    element.style.display = 'none';
+                    document.body.appendChild(element);
+                    element.click();
+                    document.body.removeChild(element);
+                })
+                .catch(error => {
+                    alert('Error downloading log: ' + error.message);
+                });
+        }
+
+        function downloadCurrentLog() {
+            if (currentLogName) {
+                downloadLog(currentLogName);
+            }
+        }
+
+        function copyLogContent() {
+            if (currentLogContent) {
+                navigator.clipboard.writeText(currentLogContent).then(() => {
+                    alert('Log copied to clipboard');
+                }).catch(error => {
+                    alert('Error copying to clipboard: ' + error.message);
+                });
+            }
+        }
+
+        function deleteLog(logName) {
+            if (!confirm(`Delete log file ${logName}?`)) {
+                return;
+            }
+
+            fetch(`/api/logs/${logName}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success || data.message) {
+                        showCleanupStatus(`✓ Deleted ${logName}`, 'success');
+                        loadLogList();
+                    } else {
+                        showCleanupStatus('Error: ' + (data.error || 'Unknown error'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    showCleanupStatus('Error: ' + error.message, 'danger');
+                });
+        }
+
+        function deleteOldLogs(days) {
+            if (!confirm(`Delete all logs older than ${days} days?`)) {
+                return;
+            }
+
+            fetch(`/api/logs?days=${days}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showCleanupStatus(`✓ Deleted ${data.deleted} log files older than ${days} days`, 'success');
+                        loadLogList();
+                    } else {
+                        showCleanupStatus('Error: ' + (data.error || 'Unknown error'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    showCleanupStatus('Error: ' + error.message, 'danger');
+                });
+        }
+
+        function deleteAllLogs() {
+            if (!confirm('Delete ALL logs? This cannot be undone.')) {
+                return;
+            }
+            if (!confirm('Are you sure? This will delete all automation logs.')) {
+                return;
+            }
+
+            fetch('/api/logs?days=0', { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showCleanupStatus(`✓ Deleted all ${data.deleted} log files`, 'success');
+                        loadLogList();
+                    } else {
+                        showCleanupStatus('Error: ' + (data.error || 'Unknown error'), 'danger');
+                    }
+                })
+                .catch(error => {
+                    showCleanupStatus('Error: ' + error.message, 'danger');
+                });
+        }
+
+        function openEmailModal(logName) {
+            document.getElementById('logNameField').value = logName;
+            document.getElementById('recipientEmail').value = '';
+            document.getElementById('emailMessage').value = '';
+            document.getElementById('emailStatus').style.display = 'none';
+            currentLogName = logName;
+            new bootstrap.Modal(document.getElementById('emailLogModal')).show();
+        }
+
+        function sendLogEmail() {
+            const logName = document.getElementById('logNameField').value;
+            const recipientEmail = document.getElementById('recipientEmail').value;
+            const message = document.getElementById('emailMessage').value;
+
+            if (!recipientEmail) {
+                alert('Please enter recipient email');
+                return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = 'Sending...';
+
+            fetch('/api/logs/email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    log_name: logName,
+                    recipient_email: recipientEmail,
+                    message: message
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const statusDiv = document.getElementById('emailStatus');
+                if (data.success) {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>✓ Ready to Send</strong><br>
+                            Copy the log content below and send to <strong>${recipientEmail}</strong>:<br>
+                            <textarea class="form-control mt-2" readonly rows="6" style="font-size: 0.75rem;">
+${data.content}
+                            </textarea>
+                            <small class="text-muted mt-2 d-block">Click the copy button or select and copy the text manually</small>
+                        </div>
+                    `;
+                    statusDiv.style.display = 'block';
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error}</div>`;
+                    statusDiv.style.display = 'block';
+                }
+                btn.disabled = false;
+                btn.innerHTML = 'Send';
+            })
+            .catch(error => {
+                const statusDiv = document.getElementById('emailStatus');
+                statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${error.message}</div>`;
+                statusDiv.style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = 'Send';
+            });
+        }
+
+        function showCleanupStatus(message, type) {
+            const statusDiv = document.getElementById('cleanupStatus');
+            statusDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 4000);
+        }
+
+        function refreshLogList() {
+            loadLogList();
+        }
+
+        // Load logs on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLogList();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Manage Templates</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .manage-container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .template-card {
+            transition: transform 0.2s;
+        }
+        .template-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .form-section {
+            display: none;
+        }
+        .form-section.active {
+            display: block;
+        }
+        .file-input-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Manage Templates</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container manage-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Manage Reimbursement Templates</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            Create templates for recurring expenses (e.g., weekly lessons, monthly tutoring).
+                            Templates can be customized per student and automatically fill in form fields.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Student Selection -->
+                <div class="card mb-4 border-info border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Select Student</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="studentSelect" class="form-label">
+                                    Choose a Student <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" id="studentSelect" onchange="loadStudentTemplates()">
+                                    <option value="">-- Select a Student --</option>
+                                    {% for student in students %}
+                                    <option value="{{ student.id }}">{{ student.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="form-text text-muted d-block mt-2">
+                                    Templates are organized by student
+                                </small>
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <button type="button" class="btn btn-primary w-100" id="addTemplateBtn"
+                                    onclick="showAddTemplateForm()" style="display: none;">
+                                    + Add New Template
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Templates List -->
+                <div id="templatesSection" style="display: none;">
+                    <div class="card border-secondary mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Templates for <span id="studentNameDisplay"></span></h5>
+                        </div>
+                        <div class="card-body" id="templatesContainer">
+                            <!-- Templates will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add/Edit Template Form -->
+                <div id="formSection" class="card border-success mb-4">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0" id="formTitle">Add New Template</h5>
+                            <button type="button" class="btn-close" onclick="cancelForm()"></button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            <strong>Templates</strong> are pre-filled forms for recurring expenses.
+                            Example: "Weekly ice skating lesson" or "Monthly tutoring service"
+                        </p>
+                        <form id="templateForm">
+                            <input type="hidden" id="templateId" name="template_id">
+                            <input type="hidden" id="studentIdInput" name="student_id">
+
+                            <div class="mb-3">
+                                <label for="templateName" class="form-label">
+                                    Template Name <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="templateName" name="name" required
+                                    placeholder="e.g., Weekly Ice Skating Lesson">
+                                <small class="form-text text-muted d-block mt-2">
+                                    A descriptive name for this template
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="vendorId" class="form-label">
+                                    Vendor <span class="text-danger">*</span>
+                                </label>
+                                <select class="form-select" id="vendorId" name="vendor_id" required>
+                                    <option value="">-- Select Vendor --</option>
+                                </select>
+                                <small class="form-text text-muted d-block mt-2">
+                                    Select an existing vendor, or <a href="/manage-vendors">create a new vendor</a>
+                                </small>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="requestType" class="form-label">Request Type</label>
+                                    <select class="form-select" id="requestType" name="request_type" onchange="updateFileInputs()">
+                                        <option value="Reimbursement">Reimbursement</option>
+                                        <option value="Direct Pay">Direct Pay</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="amount" class="form-label">
+                                        Amount ($) <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="number" class="form-control" id="amount" name="amount" required
+                                        placeholder="0.00" step="0.01" min="0">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="expenseCategory" class="form-label">Expense Category</label>
+                                <select class="form-select" id="expenseCategory" name="expense_category" onchange="updateFileInputs()">
+                                    <option value="">-- Select Category --</option>
+                                    <option value="Computer Hardware & Technological Devices">Computer Hardware & Technological Devices</option>
+                                    <option value="Curriculum">Curriculum</option>
+                                    <option value="Tutoring & Teaching Services - Accredited Facility/Business">Tutoring & Teaching Services - Accredited Facility/Business</option>
+                                    <option value="Tutoring & Teaching Services - Accredited Individual">Tutoring & Teaching Services - Accredited Individual</option>
+                                    <option value="Supplemental Materials (Curriculum Always Required)">Supplemental Materials (Curriculum Always Required)</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="comment" class="form-label">Comment/Description</label>
+                                <textarea class="form-control" id="comment" name="comment" rows="3"
+                                    placeholder="e.g., Ice Skating Rink - Lesson {yyyy-mm-dd}"></textarea>
+                                <small class="form-text text-muted d-block mt-2">
+                                    Use {yyyy-mm-dd} as placeholder for the current date
+                                </small>
+                            </div>
+
+                            <div class="alert alert-info small">
+                                <strong>Pro Tip:</strong> Select an expense category above to see required file paths.
+                                <br>File paths can be directories (for browsing) or direct file paths (for auto-loading).
+                                <br>Examples:
+                                <br>/path/to/folder (directory)
+                                <br>/path/to/file.pdf (direct file)
+                            </div>
+
+                            <div id="filesSection">
+                                <!-- File inputs will be added here based on category -->
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary" onclick="saveTemplate()">Save Template</button>
+                                <button type="button" class="btn btn-secondary" onclick="cancelForm()">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const students = {{ students | tojson }};
+        let vendors = [];
+
+        // Load vendors when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadVendors();
+        });
+
+        async function loadVendors() {
+            try {
+                const response = await fetch('/api/vendors-detailed');
+                vendors = await response.json();
+                populateVendorDropdown();
+            } catch (error) {
+                console.error('Error loading vendors:', error);
+            }
+        }
+
+        function populateVendorDropdown() {
+            const vendorSelect = document.getElementById('vendorId');
+            vendorSelect.innerHTML = '<option value="">-- Select Vendor --</option>';
+            vendors.forEach(vendor => {
+                const option = document.createElement('option');
+                option.value = vendor.id;
+                option.textContent = vendor.name;
+                vendorSelect.appendChild(option);
+            });
+        }
+
+        function loadStudentTemplates() {
+            const studentId = document.getElementById('studentSelect').value;
+            if (!studentId) {
+                document.getElementById('templatesSection').style.display = 'none';
+                document.getElementById('addTemplateBtn').style.display = 'none';
+                return;
+            }
+
+            const student = students.find(s => s.id === studentId);
+            document.getElementById('studentNameDisplay').textContent = student.name;
+            document.getElementById('addTemplateBtn').style.display = 'block';
+
+            // Fetch templates for this student
+            fetch(`/api/templates/${encodeURIComponent(student.name)}`)
+                .then(response => response.json())
+                .then(templates => {
+                    displayTemplates(templates, studentId);
+                })
+                .catch(error => {
+                    console.error('Error loading templates:', error);
+                    document.getElementById('templatesContainer').innerHTML =
+                        '<p class="text-muted">No templates found for this student.</p>';
+                    document.getElementById('templatesSection').style.display = 'block';
+                });
+        }
+
+        function displayTemplates(templates, studentId) {
+            document.getElementById('templatesSection').style.display = 'block';
+            const container = document.getElementById('templatesContainer');
+
+            // Store templates globally for edit/delete operations
+            window.currentTemplates = templates;
+
+            if (!templates || templates.length === 0) {
+                container.innerHTML = '<p class="text-muted">No templates found. <a href="#" onclick="showAddTemplateForm()">Create one</a>.</p>';
+                return;
+            }
+
+            let html = '<div class="row">';
+            templates.forEach(template => {
+                // Resolve vendor_id to vendor name (or use store_name for backward compatibility)
+                const vendorDisplay = template.vendor_name || template.store_name || 'Unknown Vendor';
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card template-card">
+                            <div class="card-body">
+                                <h6 class="card-title">${template.name}</h6>
+                                <p class="card-text small text-muted">
+                                    <strong>${vendorDisplay}</strong><br>
+                                    $${template.amount} - ${template.expense_category || 'General'}
+                                </p>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="editTemplate('${template.id}', '${studentId}')">Edit</button>
+                                    <button class="btn btn-sm btn-outline-info" onclick="showDuplicateModal('${template.id}', '${studentId}')">Duplicate</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteTemplate('${template.id}', '${studentId}')">Delete</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function showAddTemplateForm() {
+            const studentId = document.getElementById('studentSelect').value;
+            if (!studentId) {
+                alert('Please select a student first');
+                return;
+            }
+
+            document.getElementById('formSection').style.display = 'block';
+            document.getElementById('formTitle').textContent = 'Add New Template';
+            document.getElementById('templateId').value = '';
+            document.getElementById('studentIdInput').value = studentId;
+            document.getElementById('templateForm').reset();
+            document.getElementById('templateName').focus();
+            window.scrollTo(0, document.getElementById('formSection').offsetTop - 100);
+        }
+
+        // File requirement configurations
+        const expenseCategories = {
+            'Computer Hardware & Technological Devices': ['Receipt'],
+            'Curriculum': ['Receipt'],
+            'Tutoring & Teaching Services - Accredited Facility/Business': ['Receipt', 'Invoice'],
+            'Tutoring & Teaching Services - Accredited Individual': ['Receipt', 'Invoice', 'Attestation'],
+            'Supplemental Materials (Curriculum Always Required)': ['Curriculum', 'Receipt']
+        };
+
+        const directPayCategories = {
+            'Computer Hardware & Technological Devices': ['Invoice'],
+            'Curriculum': ['Invoice'],
+            'Tutoring & Teaching Services - Accredited Facility/Business': ['Invoice'],
+            'Tutoring & Teaching Services - Accredited Individual': ['Invoice'],
+            'Supplemental Materials (Curriculum Always Required)': ['Invoice', 'Curriculum']
+        };
+
+        const fileLabels = {
+            'Receipt': 'Receipt/Payment Proof (Directory or File Path)',
+            'Invoice': 'Invoice (Directory or File Path)',
+            'Attestation': 'Instructor Attestation (Directory or File Path)',
+            'Curriculum': 'Curriculum Document (Directory or File Path)'
+        };
+
+        function getCategoryConfig() {
+            const requestType = document.getElementById('requestType').value;
+            return requestType === 'Direct Pay' ? directPayCategories : expenseCategories;
+        }
+
+        function updateFileInputs() {
+            const category = document.getElementById('expenseCategory').value;
+            const container = document.getElementById('filesSection');
+
+            if (!category) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const categoryConfig = getCategoryConfig();
+            const requiredFiles = categoryConfig[category];
+
+            if (!requiredFiles) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '<div class="mb-3"><h6 class="mb-2">File Paths</h6>';
+            html += '<p class="small text-muted">Specify directories or file paths for each required file type</p>';
+
+            requiredFiles.forEach(fileType => {
+                const label = fileLabels[fileType];
+                const fieldId = `file_${fileType.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                const pickerId = `picker_${fieldId}`;
+                html += `
+                    <div class="mb-2">
+                        <label for="${fieldId}" class="form-label small">
+                            ${label} <span class="badge bg-danger">Required</span>
+                        </label>
+                        <input type="text" class="form-control form-control-sm" id="${fieldId}"
+                               data-file-type="${fileType}"
+                               placeholder="/path/to/folder or /path/to/file.pdf">
+                        <small class="form-text text-muted">
+                            Example: /Users/peter/Documents/files or /Volumes/shared/invoices/
+                        </small>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        function editTemplate(templateId, studentId) {
+            // Find the template in the loaded templates
+            const templates = window.currentTemplates || [];
+            const template = templates.find(t => t.id === templateId);
+
+            if (!template) {
+                alert('Template not found');
+                return;
+            }
+
+            // Populate form with template data
+            document.getElementById('formTitle').textContent = 'Edit Template';
+            document.getElementById('templateId').value = template.id;
+            document.getElementById('studentIdInput').value = studentId;
+            document.getElementById('templateName').value = template.name || '';
+            document.getElementById('vendorId').value = template.vendor_id || '';
+            document.getElementById('requestType').value = template.request_type || 'Reimbursement';
+            document.getElementById('amount').value = template.amount || '';
+            document.getElementById('expenseCategory').value = template.expense_category || '';
+            document.getElementById('comment').value = template.comment || '';
+
+            // Update file inputs based on category
+            updateFileInputs();
+
+            // Populate file paths if they exist
+            if (template.files) {
+                Object.entries(template.files).forEach(([fileType, filePath]) => {
+                    const fieldId = `file_${fileType.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                    const input = document.getElementById(fieldId);
+                    if (input) {
+                        input.value = filePath;
+                    }
+                });
+            }
+
+            // Show form and scroll to it
+            document.getElementById('formSection').style.display = 'block';
+            document.getElementById('templateName').focus();
+            window.scrollTo(0, document.getElementById('formSection').offsetTop - 100);
+        }
+
+        function deleteTemplate(templateId, studentId) {
+            if (!confirm('Are you sure you want to delete this template?')) {
+                return;
+            }
+
+            fetch(`/api/templates/${studentId}/${templateId}`, {
+                method: 'DELETE'
+            })
+            .then(response => {
+                if (response.ok) {
+                    loadStudentTemplates();
+                } else {
+                    alert('Error deleting template');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting template: ' + error);
+            });
+        }
+
+        function cancelForm() {
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('templateForm').reset();
+            document.getElementById('filesSection').innerHTML = '';
+        }
+
+        function saveTemplate() {
+            const name = document.getElementById('templateName').value;
+            const vendorId = document.getElementById('vendorId').value;
+            const studentId = document.getElementById('studentIdInput').value;
+            const category = document.getElementById('expenseCategory').value;
+
+            if (!name || !vendorId || !studentId) {
+                alert('Please fill in all required fields');
+                return;
+            }
+
+            // Validate file paths
+            const categoryConfig = getCategoryConfig();
+            const requiredFiles = categoryConfig[category] || [];
+            const files = {};
+            let missingFiles = [];
+
+            requiredFiles.forEach(fileType => {
+                const fieldId = `file_${fileType.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                const input = document.getElementById(fieldId);
+                const value = input ? input.value.trim() : '';
+
+                if (!value) {
+                    missingFiles.push(fileLabels[fileType]);
+                } else {
+                    files[fileType] = value;
+                }
+            });
+
+            if (missingFiles.length > 0) {
+                alert('Please provide file paths for:\n- ' + missingFiles.join('\n- '));
+                return;
+            }
+
+            // Collect template data
+            const templateData = {
+                name: name,
+                vendor_id: vendorId,
+                student_id: studentId,
+                request_type: document.getElementById('requestType').value,
+                amount: parseFloat(document.getElementById('amount').value || 0),
+                expense_category: category,
+                comment: document.getElementById('comment').value,
+                files: files
+            };
+
+            // Send to API
+            fetch('/api/templates', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(templateData)
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Template saved successfully!');
+                    cancelForm();
+                    loadStudentTemplates();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.message || 'Error saving template');
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving template: ' + error.message);
+            });
+        }
+
+        function showDuplicateModal(templateId, sourceStudentId) {
+            document.getElementById('duplicateTemplateId').value = templateId;
+            document.getElementById('duplicateSourceStudentId').value = sourceStudentId;
+            document.getElementById('duplicateTargetStudent').value = sourceStudentId;
+            const modal = new bootstrap.Modal(document.getElementById('duplicateModal'));
+            modal.show();
+        }
+
+        function duplicateTemplate() {
+            const templateId = document.getElementById('duplicateTemplateId').value;
+            const sourceStudentId = document.getElementById('duplicateSourceStudentId').value;
+            const targetStudentId = document.getElementById('duplicateTargetStudent').value;
+
+            if (!targetStudentId) {
+                alert('Please select a target student');
+                return;
+            }
+
+            fetch(`/api/templates/${sourceStudentId}/${templateId}/duplicate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    target_student_id: targetStudentId
+                })
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Template duplicated successfully!');
+                    bootstrap.Modal.getInstance(document.getElementById('duplicateModal')).hide();
+                    loadStudentTemplates();
+                } else {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Error duplicating template');
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error duplicating template: ' + error.message);
+            });
+        }
+    </script>
+
+    <!-- Duplicate Template Modal -->
+    <div class="modal fade" id="duplicateModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Duplicate Template</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="duplicateTemplateId">
+                    <input type="hidden" id="duplicateSourceStudentId">
+
+                    <div class="mb-3">
+                        <label for="duplicateTargetStudent" class="form-label">
+                            Select Target Student <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="duplicateTargetStudent" required>
+                            <option value="">-- Select Student --</option>
+                            {% for student in students %}
+                            <option value="{{ student.id }}">{{ student.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted d-block mt-2">
+                            The template will be copied to the selected student. By default, the same student is selected.
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="duplicateTemplate()">Duplicate Template</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Manage Vendors</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .manage-container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .form-section {
+            display: none;
+        }
+        .form-section.active {
+            display: block;
+        }
+        .btn-group-custom {
+            display: flex;
+            gap: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Manage Vendors</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container manage-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h3 class="mb-0">Manage Vendors & Instructors</h3>
+                            <button type="button" class="btn btn-primary" onclick="showAddVendorForm()">
+                                + Add New Vendor
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            Create profiles for instructors, service providers, and vendors you frequently pay through ClassWallet.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Vendors Table -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Current Vendors & Instructors</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Business Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Tax Rate</th>
+                                        <th style="width: 150px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="vendorsTableBody">
+                                    {% for vendor in vendors %}
+                                    <tr data-vendor-id="{{ vendor.id }}">
+                                        <td><strong>{{ vendor.name }}</strong></td>
+                                        <td>{{ vendor.get('business_name', '') or '-' }}</td>
+                                        <td><small>{{ vendor.get('email', '') or '-' }}</small></td>
+                                        <td><small>{{ vendor.get('phone', '') or '-' }}</small></td>
+                                        <td>
+                                            <small>{{ (vendor.get('tax_rate', 0) * 100)|int }}%</small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group-custom">
+                                                <button class="btn btn-sm btn-outline-primary"
+                                                    onclick="editVendor('{{ vendor.id }}')">Edit</button>
+                                                <button class="btn btn-sm btn-outline-danger"
+                                                    onclick="deleteVendor('{{ vendor.id }}', '{{ vendor.name }}')">Delete</button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if not vendors %}
+                        <div class="alert alert-info mb-0">
+                            No vendors found. <a href="#" onclick="showAddVendorForm()">Add one now</a>.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Add/Edit Vendor Form -->
+                <div id="formSection" class="card border-success mb-4">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0" id="formTitle">Add New Vendor</h5>
+                            <button type="button" class="btn-close" onclick="cancelForm()"></button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form id="vendorForm">
+                            <input type="hidden" id="vendorId" name="vendor_id">
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="vendorName" class="form-label">
+                                        Vendor/Instructor Name <span class="text-danger">*</span>
+                                    </label>
+                                    <input type="text" class="form-control" id="vendorName" name="name" required
+                                        placeholder="e.g., Ice Skating Instructor, Horseback Riding Lessons">
+                                    <small class="form-text text-muted d-block mt-2">
+                                        Individual or company name
+                                    </small>
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="businessName" class="form-label">Business Name</label>
+                                    <input type="text" class="form-control" id="businessName" name="business_name"
+                                        placeholder="e.g., AZ Ice LLC">
+                                    <small class="form-text text-muted d-block mt-2">
+                                        Official business name (optional)
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="classwalletSearchTerm" class="form-label">
+                                        ClassWallet Search Term
+                                    </label>
+                                    <input type="text" class="form-control" id="classwalletSearchTerm" name="classwallet_search_term"
+                                        placeholder="e.g., john smith">
+                                    <small class="form-text text-muted d-block mt-2">
+                                        Exact search term for Direct Pay vendor lookup. Must match precisely to return single result in ClassWallet search.
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="email" class="form-label">Email Address</label>
+                                    <input type="email" class="form-control" id="email" name="email"
+                                        placeholder="vendor@example.com">
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="phone" class="form-label">Phone Number</label>
+                                    <input type="tel" class="form-control" id="phone" name="phone"
+                                        placeholder="(555) 123-4567">
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="addressLine1" class="form-label">Address Line 1</label>
+                                    <input type="text" class="form-control" id="addressLine1" name="address_line_1"
+                                        placeholder="Street address">
+                                </div>
+
+                                <div class="col-md-6 mb-3">
+                                    <label for="addressLine2" class="form-label">Address Line 2</label>
+                                    <input type="text" class="form-control" id="addressLine2" name="address_line_2"
+                                        placeholder="City, State, ZIP">
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="taxRate" class="form-label">Tax Rate (%)</label>
+                                <input type="number" class="form-control" id="taxRate" name="tax_rate"
+                                    placeholder="0" step="0.01" min="0" max="100">
+                                <small class="form-text text-muted d-block mt-2">
+                                    Sales tax rate as a percentage (e.g., 8.25 for 8.25%)
+                                </small>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary" onclick="saveVendor()">Save Vendor</button>
+                                <button type="button" class="btn btn-secondary" onclick="cancelForm()">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const vendors = {{ vendors | tojson }};
+
+        function showAddVendorForm() {
+            document.getElementById('formSection').style.display = 'block';
+            document.getElementById('formTitle').textContent = 'Add New Vendor';
+            document.getElementById('vendorId').value = '';
+            document.getElementById('vendorForm').reset();
+            document.getElementById('vendorName').focus();
+            window.scrollTo(0, document.getElementById('formSection').offsetTop - 100);
+        }
+
+        function editVendor(vendorId) {
+            const vendor = vendors.find(v => v.id === vendorId);
+            if (!vendor) {
+                alert('Vendor not found');
+                return;
+            }
+
+            document.getElementById('formSection').style.display = 'block';
+            document.getElementById('formTitle').textContent = `Edit ${vendor.name}`;
+            document.getElementById('vendorId').value = vendor.id;
+            document.getElementById('vendorName').value = vendor.name;
+            document.getElementById('businessName').value = vendor.business_name || '';
+            document.getElementById('classwalletSearchTerm').value = vendor.classwallet_search_term || '';
+            document.getElementById('email').value = vendor.email || '';
+            document.getElementById('phone').value = vendor.phone || '';
+            document.getElementById('addressLine1').value = vendor.address_line_1 || '';
+            document.getElementById('addressLine2').value = vendor.address_line_2 || '';
+            document.getElementById('taxRate').value = (vendor.tax_rate || 0) * 100;
+            window.scrollTo(0, document.getElementById('formSection').offsetTop - 100);
+        }
+
+        function cancelForm() {
+            document.getElementById('formSection').style.display = 'none';
+            document.getElementById('vendorForm').reset();
+        }
+
+        function saveVendor() {
+            const vendorId = document.getElementById('vendorId').value;
+            const name = document.getElementById('vendorName').value;
+            const businessName = document.getElementById('businessName').value;
+            const classwalletSearchTerm = document.getElementById('classwalletSearchTerm').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+            const address1 = document.getElementById('addressLine1').value;
+            const address2 = document.getElementById('addressLine2').value;
+            const taxRate = parseFloat(document.getElementById('taxRate').value || 0) / 100;
+
+            if (!name) {
+                alert('Please enter vendor name');
+                return;
+            }
+
+            const method = vendorId ? 'PUT' : 'POST';
+            const url = vendorId ? `/api/vendors/${vendorId}` : '/api/vendors';
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: vendorId || name.toLowerCase().replace(/\s+/g, '_'),
+                    name: name,
+                    business_name: businessName,
+                    classwallet_search_term: classwalletSearchTerm,
+                    email: email,
+                    phone: phone,
+                    address_line_1: address1,
+                    address_line_2: address2,
+                    tax_rate: taxRate
+                })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                alert(`Vendor ${vendorId ? 'updated' : 'created'} successfully!`);
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`Error saving vendor: ${error.message}`);
+            });
+        }
+
+        function deleteVendor(vendorId, vendorName) {
+            if (!confirm(`Are you sure you want to delete ${vendorName}? This cannot be undone.`)) {
+                return;
+            }
+
+            fetch(`/api/vendors/${vendorId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                alert(`Vendor deleted successfully!`);
+                location.reload();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert(`Error deleting vendor: ${error.message}`);
+            });
+        }
+    </script>
+</body>
+</html>

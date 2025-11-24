@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Manage Temporary Files</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .manage-container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .btn-group-custom {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .file-size {
+            font-family: monospace;
+            text-align: right;
+        }
+        .created-date {
+            font-size: 0.9rem;
+            color: #666;
+        }
+        .cleanup-controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Manage Temporary Files</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container manage-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Manage Temporary Files</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            View and manage temporary files created when splitting multi-page PDFs. These files are stored locally on your device for convenience.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Cleanup Controls -->
+                <div class="card border-info mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Cleanup Options</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="cleanup-controls">
+                            <button type="button" class="btn btn-warning" onclick="cleanupOldFiles(7)">
+                                🗑️ Delete Files Older Than 7 Days
+                            </button>
+                            <button type="button" class="btn btn-danger" onclick="cleanupAllFiles()">
+                                🗑️ Delete All Temporary Files
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="refreshFileList()">
+                                🔄 Refresh List
+                            </button>
+                        </div>
+                        <div id="cleanupStatus" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Files Table -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Temporary Files</h5>
+                            <span class="badge bg-secondary" id="fileCountBadge">0 files</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Filename</th>
+                                        <th class="text-end">Size</th>
+                                        <th>Created</th>
+                                        <th style="width: 100px;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="filesTableBody">
+                                    <tr id="loadingRow">
+                                        <td colspan="4" class="text-center py-4">
+                                            <div class="spinner-border spinner-border-sm" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            Loading files...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Info -->
+                <div class="card border-secondary mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Storage Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-2">
+                                    <strong>Total Files:</strong>
+                                    <span id="totalFiles" class="badge bg-primary">0</span>
+                                </p>
+                                <p class="mb-0">
+                                    <strong>Total Size:</strong>
+                                    <span id="totalSize" class="badge bg-info">0 MB</span>
+                                </p>
+                            </div>
+                            <div class="col-md-6">
+                                <p class="mb-2">
+                                    <strong>Storage Location:</strong><br>
+                                    <code style="font-size: 0.85rem;">data/temp_uploads/</code>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let tempFiles = [];
+
+        // Load files when page loads
+        document.addEventListener('DOMContentLoaded', refreshFileList);
+
+        function refreshFileList() {
+            const tbody = document.getElementById('filesTableBody');
+            const loadingRow = document.getElementById('loadingRow');
+
+            if (!loadingRow) {
+                // Add loading row if it doesn't exist
+                const tr = document.createElement('tr');
+                tr.id = 'loadingRow';
+                tr.innerHTML = `
+                    <td colspan="4" class="text-center py-4">
+                        <div class="spinner-border spinner-border-sm" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        Loading files...
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            }
+
+            fetch('/api/temp-files')
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    tempFiles = data.files || [];
+                    updateFileTable();
+                })
+                .catch(error => {
+                    console.error('Error loading files:', error);
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center text-danger py-3">
+                                Error loading files: ${error.message}
+                            </td>
+                        </tr>
+                    `;
+                });
+        }
+
+        function updateFileTable() {
+            const tbody = document.getElementById('filesTableBody');
+            const countBadge = document.getElementById('fileCountBadge');
+            const totalFilesSpan = document.getElementById('totalFiles');
+            const totalSizeSpan = document.getElementById('totalSize');
+
+            countBadge.textContent = `${tempFiles.length} file${tempFiles.length !== 1 ? 's' : ''}`;
+            totalFilesSpan.textContent = tempFiles.length;
+
+            if (tempFiles.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-4">
+                            No temporary files found. Split PDFs will appear here.
+                        </td>
+                    </tr>
+                `;
+                totalSizeSpan.textContent = '0 MB';
+                return;
+            }
+
+            // Calculate total size
+            let totalSizeBytes = tempFiles.reduce((sum, file) => sum + file.size, 0);
+            totalSizeSpan.textContent = (totalSizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
+
+            // Sort files by creation date (newest first)
+            tempFiles.sort((a, b) => new Date(b.created) - new Date(a.created));
+
+            tbody.innerHTML = tempFiles.map(file => {
+                const createdDate = new Date(file.created);
+                const formattedDate = createdDate.toLocaleDateString() + ' ' + createdDate.toLocaleTimeString();
+                const sizeInMB = (file.size / (1024 * 1024)).toFixed(2);
+
+                return `
+                    <tr data-filename="${file.filename}">
+                        <td>
+                            <code style="font-size: 0.9rem;">${escapeHtml(file.filename)}</code>
+                        </td>
+                        <td class="file-size">${sizeInMB} MB</td>
+                        <td class="created-date">${formattedDate}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-danger"
+                                onclick="deleteFile('${escapeHtml(file.filename)}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function deleteFile(filename) {
+            if (!confirm(`Are you sure you want to delete ${filename}? This cannot be undone.`)) {
+                return;
+            }
+
+            fetch(`/api/temp-files/${encodeURIComponent(filename)}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    showStatus('✓ File deleted successfully!', 'success');
+                    refreshFileList();
+                } else {
+                    showStatus('✗ Error deleting file: ' + (data.message || 'Unknown error'), 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus(`✗ Error deleting file: ${error.message}`, 'danger');
+            });
+        }
+
+        function cleanupOldFiles(days) {
+            if (!confirm(`Delete all temporary files older than ${days} days? This cannot be undone.`)) {
+                return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+
+            fetch('/api/temp-files/cleanup/old', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ days: days })
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                const count = data.deleted_count || 0;
+                showStatus(`✓ Deleted ${count} file${count !== 1 ? 's' : ''} older than ${days} days`, 'success');
+                refreshFileList();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus(`✗ Error during cleanup: ${error.message}`, 'danger');
+            })
+            .finally(() => {
+                btn.disabled = false;
+            });
+        }
+
+        function cleanupAllFiles() {
+            if (!confirm('Delete ALL temporary files? This cannot be undone.')) {
+                return;
+            }
+
+            const btn = event.target;
+            btn.disabled = true;
+
+            fetch('/api/temp-files/cleanup/all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                const count = data.deleted_count || 0;
+                showStatus(`✓ Deleted all ${count} temporary file${count !== 1 ? 's' : ''}`, 'success');
+                refreshFileList();
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus(`✗ Error during cleanup: ${error.message}`, 'danger');
+            })
+            .finally(() => {
+                btn.disabled = false;
+            });
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('cleanupStatus');
+            statusDiv.innerHTML = `<div class="alert alert-${type} mb-0">${message}</div>`;
+            statusDiv.style.display = 'block';
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 4000);
+            }
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+    </script>
+</body>
+</html>

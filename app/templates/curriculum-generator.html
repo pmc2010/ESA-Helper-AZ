@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Curriculum Generator</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .generator-container {
+            max-width: 1000px;
+            margin-top: 2rem;
+        }
+        .step-card {
+            margin-bottom: 1.5rem;
+        }
+        .prompt-display {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .success-message {
+            display: none;
+        }
+        .placeholder-badge {
+            background-color: #e3f2fd;
+            border: 1px solid #90caf9;
+            color: #1565c0;
+            padding: 0.25rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .ql-container {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 1rem;
+        }
+        .ql-editor {
+            min-height: 250px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .quill-editor-wrapper {
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Curriculum Generator</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container generator-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Curriculum Generator</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead mb-0">
+                            Generate curriculum documents for your students using ChatGPT.
+                        </p>
+                        <p class="text-muted mt-2 mb-0">
+                            <strong>How it works:</strong>
+                            1) Select a student and template
+                            2) Fill in the template fields
+                            3) Copy the generated prompt
+                            4) Paste it into ChatGPT
+                            5) Paste the response back here
+                            6) Download the PDF curriculum
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Step 1: Select Student -->
+                <div class="card step-card border-info border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-info me-2">Step 1</span>
+                            Select Student
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <label for="studentSelect" class="form-label">
+                            Student <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="studentSelect" onchange="loadStudentInfo()">
+                            <option value="">-- Select a Student --</option>
+                            {% for student in students %}
+                            <option value="{{ student.id }}">{{ student.name }} ({{ student.id }})</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted d-block mt-2">
+                            Choose the student this curriculum is for
+                        </small>
+                        <div id="studentInfoDisplay" style="display: none; margin-top: 1rem;">
+                            <div class="alert alert-light">
+                                <p class="mb-1"><strong>Student:</strong> <span id="displayStudentName"></span></p>
+                                <p class="mb-0"><strong>Student ID:</strong> <code id="displayStudentId"></code></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Select or Create Template -->
+                <div class="card step-card border-warning border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-warning me-2">Step 2</span>
+                            Curriculum Template
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Create a curriculum template with placeholders like {CURRICULUM_TYPE_OPTIONAL}, {AGE}, {MATERIALS_LIST}
+                            that will be replaced with your values.
+                        </p>
+
+                        <!-- Load Saved Template -->
+                        <div class="mb-4">
+                            <label for="savedTemplateSelect" class="form-label">
+                                Or Load a Saved Template
+                            </label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select" id="savedTemplateSelect" onchange="loadSavedTemplate()">
+                                    <option value="">-- Create New Template --</option>
+                                </select>
+                                <button type="button" class="btn btn-outline-danger" id="deleteTemplateBtn" style="display: none;" onclick="deleteSavedTemplate()">
+                                    Delete
+                                </button>
+                            </div>
+                            <small class="form-text text-muted d-block mt-2">
+                                Select a previously saved template to use it again
+                            </small>
+                        </div>
+
+                        <hr>
+
+                        <label for="templateName" class="form-label">
+                            Template Name <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control mb-3" id="templateName" placeholder="e.g., Ice Skating Curriculum">
+                        <small class="form-text text-muted d-block mb-3">
+                            Give your template a descriptive name so you can find it later
+                        </small>
+
+                        <label for="templatePrompt" class="form-label">
+                            ChatGPT Prompt Template <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control" id="templatePrompt" rows="6"
+                            placeholder="Example: Create a {CURRICULUM_TYPE_OPTIONAL} curriculum for a {AGE} year old girl named [STUDENT_NAME] with student application id of [STUDENT_ID]..."></textarea>
+                        <small class="form-text text-muted d-block mt-2">
+                            Use uppercase placeholders like {PLACEHOLDER_NAME} that will be replaced with values from the form below.
+                            Placeholders should match the field labels exactly.
+                        </small>
+
+                        <div class="d-flex gap-2 mt-3">
+                            <button type="button" class="btn btn-success" onclick="saveAsTemplate()">
+                                💾 Save This Template
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="clearTemplateForm()">
+                                Clear
+                            </button>
+                        </div>
+                        <div id="templateSaveStatus"></div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Template Fields -->
+                <div class="card step-card border-success border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-success me-2">Step 3</span>
+                            Template Fields (Auto-detected from template)
+                        </h5>
+                    </div>
+                    <div class="card-body" id="fieldsContainer">
+                        <p class="text-muted">Enter your curriculum template above, and the fields will appear here automatically.</p>
+                    </div>
+                </div>
+
+                <!-- Step 4: Generated Prompt -->
+                <div class="card step-card border-secondary border-start border-5">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <span class="badge bg-secondary me-2">Step 4</span>
+                                Generated Prompt for ChatGPT
+                            </h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="copyPromptToClipboard()">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            This is the prompt that will be sent to ChatGPT. Review it, then copy it and paste it into ChatGPT.
+                        </p>
+                        <div class="prompt-display" id="generatedPrompt">
+                            [Your generated prompt will appear here]
+                        </div>
+                        <div class="alert alert-info mt-3 mb-0">
+                            <strong>Next:</strong> Copy this prompt and paste it into ChatGPT to generate your curriculum.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 5: ChatGPT Response -->
+                <div class="card step-card border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-primary me-2">Step 5</span>
+                            ChatGPT Response
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Paste the response you received from ChatGPT here. You can format the text using the toolbar above.
+                        </p>
+                        <label class="form-label">
+                            ChatGPT Response <span class="text-danger">*</span>
+                        </label>
+                        <div class="quill-editor-wrapper">
+                            <div id="chatgptResponseToolbar" class="quill-toolbar">
+                                <span class="ql-formats">
+                                    <button class="ql-bold"></button>
+                                    <button class="ql-italic"></button>
+                                    <button class="ql-underline"></button>
+                                    <button class="ql-strike"></button>
+                                </span>
+                                <span class="ql-formats">
+                                    <button class="ql-list" value="ordered"></button>
+                                    <button class="ql-list" value="bullet"></button>
+                                </span>
+                                <span class="ql-formats">
+                                    <button class="ql-blockquote"></button>
+                                    <button class="ql-code-block"></button>
+                                </span>
+                                <span class="ql-formats">
+                                    <select class="ql-header">
+                                        <option selected>Normal</option>
+                                        <option value="1">Heading 1</option>
+                                        <option value="2">Heading 2</option>
+                                    </select>
+                                </span>
+                                <span class="ql-formats">
+                                    <button class="ql-clean"></button>
+                                </span>
+                            </div>
+                            <div id="chatgptResponse" class="ql-editor"
+                                data-placeholder="Paste the curriculum text that ChatGPT generates here..."></div>
+                        </div>
+                        <small class="form-text text-muted d-block mt-2">
+                            The full response from ChatGPT will be formatted into a PDF. Use the formatting toolbar to style the content.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Step 6: Generate PDF -->
+                <div class="card step-card border-success border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-success me-2">Step 6</span>
+                            Generate & Save PDF
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            Create a PDF of the curriculum and save it to your student's folder.
+                        </p>
+
+                        <label for="curriculumTitle" class="form-label">Curriculum Title (for PDF)</label>
+                        <input type="text" class="form-control mb-3" id="curriculumTitle"
+                            placeholder="e.g., Ice Skating Curriculum - Fall 2025">
+
+                        <label for="savePath" class="form-label">Save Location</label>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="savePath"
+                                placeholder="Will default to student's folder">
+                            <button class="btn btn-outline-secondary" type="button" id="browseBtn" onclick="openDirectoryBrowser()">
+                                📁 Browse
+                            </button>
+                        </div>
+                        <small class="form-text text-muted d-block mb-3">
+                            Edit the path or click Browse to select a folder.
+                        </small>
+
+                        <button type="button" class="btn btn-success btn-lg" onclick="generatePDF()">
+                            📄 Generate PDF Curriculum
+                        </button>
+
+                        <div id="successMessage" class="alert alert-success mt-3" style="display: none;">
+                            <strong>✓ Success!</strong> Your curriculum PDF has been saved.
+                            <br>
+                            <small id="pdfPath"></small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Directory Browser Modal -->
+    <div class="modal fade" id="directoryBrowserModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Select Save Location</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Current Path:</label>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="browserCurrentPath" readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="browseUp()">↑ Up</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Create New Folder:</label>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="newFolderName" placeholder="Folder name">
+                            <button class="btn btn-outline-primary" type="button" onclick="createNewFolder()">+ Create</button>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Folders:</label>
+                        <div id="directoryList" style="border: 1px solid #dee2e6; border-radius: 0.25rem; max-height: 300px; overflow-y: auto;">
+                            <p class="text-muted p-3 mb-0">Loading...</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="selectDirectory()">Select This Folder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+    <script>
+        const students = {{ students | tojson }};
+        let currentStudent = null;
+        let extractedFields = [];
+        let savedTemplates = [];
+        let currentTemplateId = null;
+        let quillEditor = null;
+
+        /**
+         * Get URL parameters
+         */
+        function getUrlParameter(name) {
+            const url = new URL(window.location);
+            return url.searchParams.get(name);
+        }
+
+        function loadStudentInfo() {
+            const studentId = document.getElementById('studentSelect').value;
+            if (!studentId) {
+                document.getElementById('studentInfoDisplay').style.display = 'none';
+                document.getElementById('savedTemplateSelect').innerHTML = '<option value="">-- Create New Template --</option>';
+                savedTemplates = [];
+                return;
+            }
+
+            currentStudent = students.find(s => s.id === studentId);
+            if (currentStudent) {
+                document.getElementById('displayStudentName').textContent = currentStudent.name;
+                document.getElementById('displayStudentId').textContent = currentStudent.id;
+                document.getElementById('studentInfoDisplay').style.display = 'block';
+                document.getElementById('savePath').placeholder = currentStudent.folder;
+
+                // Load saved templates for this student
+                loadSavedTemplatesForStudent();
+            }
+            updateGeneratedPrompt();
+        }
+
+        /**
+         * Initialize: Auto-select student if passed in URL parameters
+         */
+        function initializeStudentFromUrl() {
+            const studentParam = getUrlParameter('student');
+            if (studentParam) {
+                const select = document.getElementById('studentSelect');
+                const student = students.find(s => s.id === studentParam);
+                if (student) {
+                    select.value = student.id;
+                    loadStudentInfo();
+                }
+            }
+        }
+
+        /**
+         * Load saved curriculum templates for the selected student
+         */
+        async function loadSavedTemplatesForStudent() {
+            if (!currentStudent) return;
+
+            try {
+                const response = await fetch(`/api/curriculum-templates/${encodeURIComponent(currentStudent.name)}`);
+                savedTemplates = await response.json();
+
+                // Update the template dropdown
+                const select = document.getElementById('savedTemplateSelect');
+                select.innerHTML = '<option value="">-- Create New Template --</option>';
+
+                if (savedTemplates.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = 'Saved Templates';
+
+                    savedTemplates.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.name;
+                        optgroup.appendChild(option);
+                    });
+
+                    select.appendChild(optgroup);
+                }
+            } catch (error) {
+                console.error('Error loading saved templates:', error);
+            }
+        }
+
+        /**
+         * Load a saved template into the form
+         */
+        function loadSavedTemplate() {
+            const templateId = document.getElementById('savedTemplateSelect').value;
+
+            if (!templateId) {
+                clearTemplateForm();
+                return;
+            }
+
+            const template = savedTemplates.find(t => t.id === templateId);
+            if (template) {
+                currentTemplateId = template.id;
+                document.getElementById('templateName').value = template.name;
+                document.getElementById('templatePrompt').value = template.prompt_template;
+                document.getElementById('deleteTemplateBtn').style.display = 'inline-block';
+
+                // Update fields
+                updateFieldsContainer();
+                updateGeneratedPrompt();
+
+                // Scroll to template section
+                document.querySelector('.step-card.border-warning').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        /**
+         * Save current template
+         */
+        async function saveAsTemplate() {
+            const templateName = document.getElementById('templateName').value.trim();
+            const promptTemplate = document.getElementById('templatePrompt').value.trim();
+
+            if (!templateName) {
+                alert('Please enter a template name');
+                return;
+            }
+
+            if (!promptTemplate) {
+                alert('Please enter a prompt template');
+                return;
+            }
+
+            if (!currentStudent) {
+                alert('Please select a student first');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/curriculum-templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: currentTemplateId,
+                        student_name: currentStudent.name,
+                        name: templateName,
+                        prompt_template: promptTemplate
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    currentTemplateId = result.template.id;
+
+                    // Show success message
+                    const statusDiv = document.getElementById('templateSaveStatus');
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success mt-3">
+                            <strong>✓ Template Saved!</strong> "${templateName}" has been saved and is now available for future use.
+                        </div>
+                    `;
+
+                    // Reload templates
+                    await loadSavedTemplatesForStudent();
+
+                    // Update select to show saved template
+                    document.getElementById('savedTemplateSelect').value = currentTemplateId;
+                    document.getElementById('deleteTemplateBtn').style.display = 'inline-block';
+
+                    // Clear status after 5 seconds
+                    setTimeout(() => {
+                        statusDiv.innerHTML = '';
+                    }, 5000);
+                } else {
+                    alert('Error saving template: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error saving template:', error);
+                alert('Error saving template');
+            }
+        }
+
+        /**
+         * Delete current template
+         */
+        async function deleteSavedTemplate() {
+            if (!currentTemplateId || !currentStudent) {
+                alert('No template selected');
+                return;
+            }
+
+            const templateName = document.getElementById('templateName').value;
+
+            if (!confirm(`Are you sure you want to delete "${templateName}"? This cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(
+                    `/api/curriculum-templates/${encodeURIComponent(currentStudent.name)}/${currentTemplateId}`,
+                    { method: 'DELETE' }
+                );
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert('Template deleted successfully');
+                    clearTemplateForm();
+                    currentTemplateId = null;
+                    await loadSavedTemplatesForStudent();
+                } else {
+                    alert('Error deleting template: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error deleting template:', error);
+                alert('Error deleting template');
+            }
+        }
+
+        /**
+         * Clear template form
+         */
+        function clearTemplateForm() {
+            currentTemplateId = null;
+            document.getElementById('templateName').value = '';
+            document.getElementById('templatePrompt').value = '';
+            document.getElementById('savedTemplateSelect').value = '';
+            document.getElementById('deleteTemplateBtn').style.display = 'none';
+            document.getElementById('templateSaveStatus').innerHTML = '';
+            document.getElementById('fieldsContainer').innerHTML =
+                '<p class="text-muted">Enter your curriculum template above, and the fields will appear here automatically.</p>';
+        }
+
+        function extractPlaceholders(template) {
+            const regex = /{([A-Z_]+)}/g;
+            const placeholders = new Set();
+            let match;
+
+            while ((match = regex.exec(template)) !== null) {
+                placeholders.add(match[1]);
+            }
+
+            return Array.from(placeholders);
+        }
+
+        function updateFieldsContainer() {
+            const template = document.getElementById('templatePrompt').value;
+            extractedFields = extractPlaceholders(template);
+
+            if (extractedFields.length === 0) {
+                document.getElementById('fieldsContainer').innerHTML =
+                    '<p class="text-muted">No placeholders found. Use {PLACEHOLDER_NAME} format in your template.</p>';
+                return;
+            }
+
+            let html = '<div class="row">';
+            extractedFields.forEach(field => {
+                const fieldId = field.toLowerCase();
+                html += `
+                    <div class="col-md-6 mb-3">
+                        <label for="${fieldId}" class="form-label">
+                            ${field.replace(/_/g, ' ')} <span class="text-danger">*</span>
+                        </label>
+                        <input type="text" class="form-control" id="${fieldId}" placeholder="Enter ${field.toLowerCase()}"
+                            onchange="updateGeneratedPrompt()">
+                    </div>
+                `;
+            });
+            html += '</div>';
+            document.getElementById('fieldsContainer').innerHTML = html;
+            updateGeneratedPrompt();
+        }
+
+        function updateGeneratedPrompt() {
+            const template = document.getElementById('templatePrompt').value;
+            let prompt = template;
+
+            // Replace extracted field placeholders
+            extractedFields.forEach(field => {
+                const fieldValue = document.getElementById(field.toLowerCase()).value;
+                const regex = new RegExp(`{${field}}`, 'g');
+                prompt = prompt.replace(regex, fieldValue || `{${field}}`);
+            });
+
+            // Replace student info if available
+            if (currentStudent) {
+                prompt = prompt.replace(/\[STUDENT_NAME\]/g, currentStudent.name);
+                prompt = prompt.replace(/\[STUDENT_ID\]/g, currentStudent.id);
+            }
+
+            document.getElementById('generatedPrompt').textContent = prompt;
+        }
+
+        function copyPromptToClipboard() {
+            const prompt = document.getElementById('generatedPrompt').textContent;
+            if (!prompt || prompt.includes('[Your generated')) {
+                alert('Please fill in all template fields first');
+                return;
+            }
+
+            navigator.clipboard.writeText(prompt).then(() => {
+                alert('✓ Prompt copied to clipboard!\n\nNow paste it into ChatGPT.');
+            });
+        }
+
+        async function generatePDF() {
+            // Get content from Quill editor
+            const response = quillEditor.root.innerHTML;
+            const plainText = quillEditor.getText().trim();
+            const title = document.getElementById('curriculumTitle').value;
+            let savePath = document.getElementById('savePath').value.trim();
+
+            if (!plainText) {
+                alert('Please paste the ChatGPT response');
+                return;
+            }
+
+            if (!currentStudent) {
+                alert('Please select a student');
+                return;
+            }
+
+            if (!title) {
+                alert('Please enter a curriculum title');
+                return;
+            }
+
+            // Use default path if not specified
+            if (!savePath) {
+                savePath = currentStudent.folder;
+            }
+
+            // Show loading status
+            const statusDiv = document.getElementById('successMessage');
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<strong>Generating PDF...</strong>';
+
+            try {
+                const response_obj = await fetch('/api/curriculum/generate-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        student_name: currentStudent.name,
+                        student_id: currentStudent.id,
+                        title: title,
+                        content: response,
+                        save_path: savePath
+                    })
+                });
+
+                const result = await response_obj.json();
+
+                if (response_obj.ok && result.success) {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>✓ Success!</strong> Your curriculum PDF has been saved.
+                            <br>
+                            <small>
+                                📄 <a id="pdfPath" href="#" style="color: #0d6efd; text-decoration: underline; cursor: pointer;">${result.file_path}</a>
+                            </small>
+                        </div>
+                    `;
+
+                    // Make the PDF path clickable to open the file
+                    document.getElementById('pdfPath').addEventListener('click', function(e) {
+                        e.preventDefault();
+                        const filePath = '${result.file_path}'.replace(/\\\\/g, '/');
+                        // Try to open with file:// protocol
+                        window.open('file://' + filePath, '_blank');
+                    });
+
+                    // Update the save path field to show where it was saved
+                    document.getElementById('savePath').value = result.file_path;
+                } else {
+                    statusDiv.innerHTML = `
+                        <div class="alert alert-danger">
+                            <strong>✗ Error:</strong> ${result.error || 'Failed to generate PDF'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error generating PDF:', error);
+                statusDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>✗ Error:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Update fields when template changes
+        document.getElementById('templatePrompt').addEventListener('change', updateFieldsContainer);
+        document.getElementById('templatePrompt').addEventListener('input', updateGeneratedPrompt);
+
+        // Initialize Quill Editor
+        quillEditor = new Quill('#chatgptResponse', {
+            theme: 'snow',
+            placeholder: 'Paste the curriculum text that ChatGPT generates here...',
+            modules: {
+                toolbar: '#chatgptResponseToolbar'
+            }
+        });
+
+        // Custom paste handler to clean up ChatGPT formatting
+        const editorElement = document.querySelector('#chatgptResponse');
+        editorElement.addEventListener('paste', function(e) {
+            e.preventDefault();
+
+            let text = '';
+            let html = '';
+
+            if (e.clipboardData || window.clipboardData) {
+                const clipboardData = e.clipboardData || window.clipboardData;
+
+                // Try to get HTML first, fall back to plain text
+                html = clipboardData.getData('text/html');
+                if (!html) {
+                    text = clipboardData.getData('text/plain');
+                }
+            }
+
+            // Debug: Log what we're working with
+            console.log('=== PASTE DEBUG ===');
+            console.log('HTML before cleaning:', html);
+            console.log('Plain text:', text);
+            console.log('==================');
+
+            // If we have HTML, clean it up
+            if (html) {
+                // Remove Microsoft Word specific markup
+                html = html
+                    .replace(/<\?xml[^>]*>/g, '')
+                    .replace(/<meta[^>]*>/g, '')
+                    .replace(/class="[^"]*mso[^"]*"/g, '')
+                    .replace(/style="[^"]*mso[^"]*"/g, '');
+
+                // Aggressively clean empty list items with any combination of whitespace, nbsp, or br tags
+                // Keep removing until no more empty items exist
+                let prevHtml = '';
+                while (prevHtml !== html) {
+                    prevHtml = html;
+                    html = html
+                        // Remove li with only whitespace/nbsp
+                        .replace(/<li[^>]*>[\s&nbsp;]*<\/li>/gi, '')
+                        // Remove li with only br tags
+                        .replace(/<li[^>]*>[\s<br\s\/>]*<\/li>/gi, '')
+                        // Remove li with br and whitespace
+                        .replace(/<li[^>]*>[\s&nbsp;<br\s/>]*<\/li>/gi, '')
+                        // Remove li with only a number and period (from ChatGPT numbering)
+                        .replace(/<li[^>]*>\s*\d+\.\s*<\/li>/gi, '')
+                        // Remove li with only a bullet point or dash
+                        .replace(/<li[^>]*>\s*[\•\-\*]\s*<\/li>/gi, '')
+                        // Remove li with number/bullet followed only by whitespace/nbsp
+                        .replace(/<li[^>]*>[\s\d\.\•\-\*&nbsp;]+<\/li>/gi, '');
+                }
+
+                // Remove empty paragraphs
+                html = html.replace(/<p[^>]*>[\s&nbsp;]*<\/p>/gi, '')
+                    .replace(/<p[^>]*>[\s<br\s/>]*<\/p>/gi, '');
+
+                // Remove empty ol/ul tags
+                html = html.replace(/<(ol|ul)[^>]*>\s*<\/(ol|ul)>/gi, '');
+
+                // Clean up spacing in list items
+                html = html.replace(/<li[^>]*>\s+/g, '<li>')
+                    .replace(/\s+<\/li>/g, '</li>');
+
+                // Remove attributes from li, ol, ul tags (they can cause issues with Quill)
+                html = html.replace(/<li[^>]*>/g, '<li>')
+                    .replace(/<ol[^>]*>/g, '<ol>')
+                    .replace(/<ul[^>]*>/g, '<ul>');
+
+                // Remove <p> tags from inside list items - they cause Quill to create extra items
+                html = html.replace(/<li>[\s\n]*<p[^>]*>/g, '<li>')
+                    .replace(/<\/p>[\s\n]*<\/li>/g, '</li>');
+
+                // Remove ChatGPT-specific attributes (data-start, data-end) from all elements
+                // These can confuse Quill's parser
+                html = html.replace(/\s+data-start="[^"]*"/g, '')
+                    .replace(/\s+data-end="[^"]*"/g, '');
+
+                // Extract just the body content (Quill doesn't like html/body wrapper tags)
+                let bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+                let bodyContent = bodyMatch ? bodyMatch[1] : html;
+
+                // Remove unnecessary newlines and whitespace between HTML tags
+                // This prevents Quill from rendering extra line breaks
+                bodyContent = bodyContent
+                    .replace(/>\s*\n\s*</g, '><')  // Remove newlines between tags
+                    .replace(/<br>\s*\n/g, '<br>'); // Remove newlines after <br> tags
+
+                // Debug: Log cleaned HTML
+                console.log('HTML after cleaning:', html);
+                console.log('Body content for Quill:', bodyContent);
+                console.log('==================');
+
+                // Insert the cleaned HTML (body content only, no wrapper)
+                const newDelta = quillEditor.clipboard.convert(bodyContent);
+                quillEditor.updateContents(newDelta, 'user');
+            } else if (text) {
+                // For plain text, just insert it normally
+                quillEditor.updateContents(
+                    new Delta().insert(text),
+                    'user'
+                );
+            }
+        });
+
+        // Directory Browser State
+        let directoryBrowserPath = '';
+        let directoryBrowserModal = null;
+
+        /**
+         * Open directory browser modal
+         */
+        async function openDirectoryBrowser() {
+            if (!currentStudent) {
+                alert('Please select a student first');
+                return;
+            }
+
+            directoryBrowserPath = document.getElementById('savePath').value.trim();
+            if (!directoryBrowserPath) {
+                directoryBrowserPath = currentStudent.folder;
+            }
+
+            directoryBrowserModal = new bootstrap.Modal(document.getElementById('directoryBrowserModal'));
+            await loadDirectoryContents(directoryBrowserPath);
+            directoryBrowserModal.show();
+        }
+
+        /**
+         * Load directory contents via API
+         */
+        async function loadDirectoryContents(path) {
+            try {
+                const response = await fetch('/api/list-directories', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: path })
+                });
+
+                const result = await response.json();
+
+                document.getElementById('browserCurrentPath').value = result.current_path;
+                directoryBrowserPath = result.current_path;
+
+                const directoryList = document.getElementById('directoryList');
+                if (result.subdirectories && result.subdirectories.length > 0) {
+                    directoryList.innerHTML = result.subdirectories.map(dir => `
+                        <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center cursor-pointer" onclick="loadDirectoryContents('${dir.path}')">
+                            <span>📁 ${dir.name}</span>
+                            <small class="text-muted">→</small>
+                        </div>
+                    `).join('');
+                } else {
+                    directoryList.innerHTML = '<p class="text-muted p-3 mb-0">No subdirectories</p>';
+                }
+
+                document.getElementById('newFolderName').value = '';
+            } catch (error) {
+                console.error('Error loading directories:', error);
+                document.getElementById('directoryList').innerHTML = `<p class="text-danger p-3 mb-0">Error: ${error.message}</p>`;
+            }
+        }
+
+        /**
+         * Navigate up one directory
+         */
+        async function browseUp() {
+            const pathParts = directoryBrowserPath.split('/').filter(p => p);
+            if (pathParts.length > 1) {
+                pathParts.pop();
+                const parentPath = '/' + pathParts.join('/');
+                await loadDirectoryContents(parentPath);
+            }
+        }
+
+        /**
+         * Create a new folder
+         */
+        async function createNewFolder() {
+            const folderName = document.getElementById('newFolderName').value.trim();
+            if (!folderName) {
+                alert('Please enter a folder name');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/create-directory', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        parent_path: directoryBrowserPath,
+                        folder_name: folderName
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    await loadDirectoryContents(result.new_path);
+                    alert(`Created folder: ${folderName}`);
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error creating folder:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        /**
+         * Select current directory and close modal
+         */
+        function selectDirectory() {
+            document.getElementById('savePath').value = directoryBrowserPath;
+            if (directoryBrowserModal) {
+                directoryBrowserModal.hide();
+            }
+        }
+
+        // Initialize
+        updateFieldsContainer();
+
+        // Auto-select student if passed in URL parameters
+        document.addEventListener('DOMContentLoaded', initializeStudentFromUrl);
+    </script>
+</body>
+</html>

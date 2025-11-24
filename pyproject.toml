@@ -1,0 +1,21 @@
+[project]
+name = "esa-helpers"
+version = "0.1.0"
+description = "Automated ESA reimbursement and direct pay submission tool for ClassWallet"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "selenium>=4.38.0",
+    "flask>=3.0.0",
+    "pillow>=10.0.0",
+    "openpyxl>=3.1.0",
+    "reportlab>=4.0.0",
+    "PyPDF2>=3.0.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-flask>=1.2.0",
+]

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - First Time Setup</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .setup-container {
+            max-width: 900px;
+            margin-top: 3rem;
+        }
+        .setup-section {
+            margin-bottom: 2rem;
+        }
+        .requirement-item {
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .requirement-item:last-child {
+            border-bottom: none;
+        }
+        .requirement-status {
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .status-check {
+            color: #28a745;
+        }
+        .status-warning {
+            color: #ffc107;
+        }
+        .status-error {
+            color: #dc3545;
+        }
+        .section-divider {
+            margin: 2rem 0;
+            border-bottom: 2px solid #dee2e6;
+            padding-bottom: 1rem;
+        }
+        .setup-nav {
+            display: flex;
+            gap: 1rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+        .setup-nav .btn {
+            flex: 1;
+            min-width: 200px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/setup">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">First Time Setup</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/requirements">Requirements</a>
+                    </li>
+                    {% if config %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">Go to App</a>
+                        </li>
+                    {% endif %}
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container setup-container">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <!-- Welcome Section -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Welcome to ESA Helper</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="lead">
+                            ESA Helper automates your ClassWallet reimbursement submissions, saving you 10+ minutes per request.
+                        </p>
+                        <p>
+                            This setup wizard will help you configure your ESA account and set up your family's student profiles.
+                            You can manage and update these settings anytime from the Settings menu.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Requirements Section -->
+                <div class="card mb-4 border-success border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">System Requirements</h5>
+                        <small class="text-muted">Your system meets these requirements</small>
+                    </div>
+                    <div class="card-body">
+                        <div class="requirement-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Operating System:</strong> macOS, Windows, or Linux</span>
+                                <span class="requirement-status status-check">✓ Supported</span>
+                            </div>
+                        </div>
+                        <div class="requirement-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Python:</strong> 3.11 or higher</span>
+                                <span class="requirement-status status-check">✓ Installed</span>
+                            </div>
+                        </div>
+                        <div class="requirement-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>Web Browser:</strong> Chrome/Chromium (for automation)</span>
+                                <span class="requirement-status status-check">✓ Required</span>
+                            </div>
+                        </div>
+                        <div class="requirement-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span><strong>LibreOffice:</strong> For PDF conversion (optional)</span>
+                                <span class="requirement-status status-warning">⚠ Optional</span>
+                            </div>
+                        </div>
+                        <p class="small text-muted mt-3 mb-0">
+                            <strong>Note:</strong> See the <a href="/requirements">Requirements page</a> for complete installation instructions.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- ESA Credentials Section -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-primary me-2">Step 1</span>
+                            ESA Account Credentials
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Enter your ClassWallet ESA account credentials. These will be securely stored locally and used to automate form submissions.
+                        </p>
+                        <form id="credentialsForm">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">
+                                    ESA Account Email <span class="text-danger">*</span>
+                                </label>
+                                <input type="email" class="form-control" id="email" name="email" required
+                                    placeholder="your.email@example.com" value="{{ config.email if config else '' }}">
+                                <small class="form-text text-muted d-block mt-2">
+                                    The email address you use to log into ClassWallet.
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password" class="form-label">
+                                    Password <span class="text-danger">*</span>
+                                </label>
+                                <input type="password" class="form-control" id="password" name="password" required
+                                    placeholder="••••••••">
+                                <small class="form-text text-muted d-block mt-2">
+                                    Your ClassWallet password. Stored locally only, never sent to third parties.
+                                </small>
+                            </div>
+
+                            <div class="alert alert-info">
+                                <strong>Security Note:</strong> Your credentials are stored in <code>config.json</code> on your computer.
+                                Never share this file with others. The automation requires credentials to log in and submit forms on your behalf.
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Student Setup Section -->
+                <div class="card mb-4 border-success border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-success me-2">Step 2</span>
+                            Add Your Students
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Add each of your children as a student profile. You'll need at least one to use ESA Helper.
+                        </p>
+                        <div class="alert alert-info mb-3">
+                            <strong>Already Added:</strong> The following default students are available as examples:
+                            <ul class="mb-0 mt-2">
+                                <li>Student One</li>
+                                <li>Student Two</li>
+                                <li>Student Three</li>
+                            </ul>
+                            You can edit these or add new students in the <strong>Settings</strong> menu.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Optional Setup Section -->
+                <div class="card mb-4 border-warning border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-warning me-2">Step 3</span>
+                            Optional: Manage Additional Items
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            These settings can be configured now or anytime later from the menu.
+                        </p>
+
+                        <div class="list-group">
+                            <a href="/manage-students" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">Manage Student Profiles</h6>
+                                <p class="mb-0 text-muted small">Add, edit, or delete student information and file paths.</p>
+                            </a>
+                            <a href="/manage-vendors" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">Manage Vendors/Instructors</h6>
+                                <p class="mb-0 text-muted small">Create profiles for instructors and vendors you frequently use.</p>
+                            </a>
+                            <a href="/manage-templates" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">Create Reimbursement Templates</h6>
+                                <p class="mb-0 text-muted small">Set up templates for recurring expenses (e.g., weekly lessons).</p>
+                            </a>
+                            <a href="/manage-curriculum-templates" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">Manage Curriculum Templates</h6>
+                                <p class="mb-0 text-muted small">Create prompt templates for ChatGPT curriculum generation.</p>
+                            </a>
+                            <a href="/requirements" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">View Full Requirements & Setup Guide</h6>
+                                <p class="mb-0 text-muted small">Installation instructions, troubleshooting, and detailed setup guide.</p>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="setup-nav">
+                    <button type="button" class="btn btn-primary btn-lg" id="saveSetupBtn" onclick="saveSetup()">
+                        Save & Continue
+                    </button>
+                    {% if config %}
+                        <a href="/" class="btn btn-secondary btn-lg">
+                            Skip Setup
+                        </a>
+                    {% endif %}
+                </div>
+
+                <div class="text-center mt-4 mb-4">
+                    <p class="text-muted">
+                        Need help? Check the <a href="/requirements">Requirements & Help page</a> or see the Help menu in the app.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function saveSetup() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                alert('Please enter both email and password.');
+                return;
+            }
+
+            // Save credentials
+            fetch('/api/config/credentials', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    email: email,
+                    password: password
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Setup complete! Redirecting to main app...');
+                    window.location.href = '/';
+                } else {
+                    alert('Error saving credentials. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error saving credentials. Please try again.');
+            });
+        }
+
+        // Load existing credentials if they exist
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/api/config/credentials')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.configured) {
+                        // Show skip setup button if already configured
+                        console.log('Credentials already configured');
+                    }
+                });
+        });
+    </script>
+</body>
+</html>

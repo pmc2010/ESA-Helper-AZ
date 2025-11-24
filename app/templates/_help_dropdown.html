@@ -1,0 +1,18 @@
+{# Shared Help Dropdown Component
+   Include this in your navbar to avoid duplication
+   Usage: {% include '_help_dropdown.html' %}
+#}
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="helpDropdown" role="button" data-bs-toggle="dropdown">
+        Help
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="helpDropdown">
+        <li><a class="dropdown-item" href="/requirements">Requirements & Setup</a></li>
+        <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#helpModal">Instructions & Tips</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="/curriculum-generator">Curriculum Generator</a></li>
+        <li><a class="dropdown-item" href="/data-migration">Data Backup & Migration</a></li>
+        <li><a class="dropdown-item" href="/faq">FAQ</a></li>
+    </ul>
+</li>

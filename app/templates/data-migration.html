@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Data Migration & Backup</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .migration-container {
+            max-width: 900px;
+            margin-top: 2rem;
+        }
+        .section-card {
+            margin-bottom: 2rem;
+        }
+        .command-block {
+            background-color: #f5f5f5;
+            border-left: 4px solid #007bff;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            border-radius: 0.25rem;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Data Migration & Backup</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container migration-container">
+        <div class="row">
+            <div class="col-lg-10 offset-lg-1">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Data Migration & Backup</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            Export your student, vendor, and template data for backup or transfer to another computer.
+                            You can also import previously exported data files.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Export Section -->
+                <div class="card section-card border-success border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-success me-2">1</span>
+                            Export Your Data
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Create a backup of all your data (students, vendors, templates). This downloads a JSON file
+                            that you can store safely or share with family members to import into their ESA Helper setup.
+                        </p>
+
+                        <div class="alert alert-info mb-3">
+                            <strong>File Size:</strong> Usually less than 100KB
+                            <br>
+                            <strong>Format:</strong> JSON (human-readable text)
+                            <br>
+                            <strong>Includes:</strong> Student profiles, vendor information, and templates
+                            <br>
+                            <strong>Excludes:</strong> ESA credentials and passwords (for security)
+                        </div>
+
+                        <button type="button" class="btn btn-success btn-lg" onclick="exportData()">
+                            <svg class="bi me-2" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 12L3 7h2V1h6v6h2l-5 5zm0 1l5-5h-2V0H5v6H3l5 5z"/>
+                            </svg>
+                            Download Backup File
+                        </button>
+
+                        <div id="exportStatus" class="mt-3" style="display: none;">
+                            <div class="alert alert-success">
+                                <strong>✓ Success!</strong> Your data has been downloaded as <code id="exportFileName">data-backup.json</code>
+                                <br>
+                                <small>Keep this file safe. You can use it to restore data or import to another device.</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Import Section -->
+                <div class="card section-card border-info border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-info me-2">2</span>
+                            Import Data
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Restore a backup or merge data from another ESA Helper installation. Upload a previously exported
+                            JSON file to restore your data.
+                        </p>
+
+                        <div class="alert alert-warning">
+                            <strong>⚠ Important:</strong> Importing will <strong>replace</strong> existing data with the same IDs.
+                            Make sure you want to proceed before importing.
+                        </div>
+
+                        <form id="importForm" onsubmit="importData(event)">
+                            <div class="mb-4">
+                                <label for="importFile" class="form-label">
+                                    Select JSON File to Import <span class="text-danger">*</span>
+                                </label>
+                                <input type="file" class="form-control" id="importFile" name="import_file"
+                                    accept=".json" required onchange="loadImportPreview(event)">
+                                <small class="form-text text-muted d-block mt-2">
+                                    Choose the JSON file you exported previously
+                                </small>
+                            </div>
+
+                            <!-- Import Categories Selection -->
+                            <div class="card border-info mb-4" id="importCategories" style="display: none;">
+                                <div class="card-header bg-light">
+                                    <h6 class="mb-0">Select What to Import</h6>
+                                </div>
+                                <div class="card-body">
+                                    <p class="text-muted small mb-3">Choose which data to import. Leave unchecked to skip:</p>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_students" value="students" checked>
+                                        <label class="form-check-label" for="import_students">
+                                            <strong>Students</strong> - <span class="text-muted" id="students_count">Student profiles</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_vendors" value="vendors" checked>
+                                        <label class="form-check-label" for="import_vendors">
+                                            <strong>Vendors</strong> - <span class="text-muted" id="vendors_count">Vendor and instructor information</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_templates" value="templates" checked>
+                                        <label class="form-check-label" for="import_templates">
+                                            <strong>Reimbursement Templates</strong> - <span class="text-muted" id="templates_count">Saved form templates</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_submission_history" value="submission_history" checked>
+                                        <label class="form-check-label" for="import_submission_history">
+                                            <strong>Submission History</strong> - <span class="text-muted" id="submission_count">Audit trail of submissions</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_curriculum_templates" value="curriculum_templates" checked>
+                                        <label class="form-check-label" for="import_curriculum_templates">
+                                            <strong>Curriculum Templates</strong> - <span class="text-muted" id="curriculum_count">ChatGPT curriculum templates</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input import-category" type="checkbox" id="import_settings" value="settings" checked>
+                                        <label class="form-check-label" for="import_settings">
+                                            <strong>Settings</strong> - <span class="text-muted" id="settings_count">Auto-submit and other preferences</span>
+                                        </label>
+                                    </div>
+
+                                    <hr>
+
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-outline-secondary" onclick="selectAllImport()">Select All</button>
+                                        <button type="button" class="btn btn-outline-secondary" onclick="deselectAllImport()">Deselect All</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="confirmImport" required>
+                                <label class="form-check-label" for="confirmImport">
+                                    I understand that this will replace existing data with the same IDs
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-info btn-lg">
+                                <svg class="bi me-2" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                                    <path d="M8 1l5 5h-2v6H5V6H3l5-5zm0 0l-5 5h2v6h6V6h2l-5-5z"/>
+                                </svg>
+                                Import Data
+                            </button>
+                        </form>
+
+                        <div id="importStatus" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Reset All Data Section -->
+                <div class="card section-card border-danger border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <span class="badge bg-danger me-2">⚠</span>
+                            Reset All Data
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-3">
+                            Permanently delete all your data and start fresh. This cannot be undone. Your ClassWallet credentials
+                            will be preserved.
+                        </p>
+
+                        <div class="alert alert-danger">
+                            <strong>⚠ WARNING:</strong> This action will permanently delete:
+                            <ul class="mt-2 mb-0">
+                                <li>All student profiles</li>
+                                <li>All vendor/instructor information</li>
+                                <li>All reimbursement templates</li>
+                                <li>All curriculum templates</li>
+                                <li>All submission history records</li>
+                                <li>All log files (automation logs, submission logs)</li>
+                            </ul>
+                        </div>
+
+                        <div class="alert alert-info">
+                            <strong>ℹ Preserved:</strong> Your ClassWallet credentials in config.json will NOT be deleted.
+                        </div>
+
+                        <button type="button" class="btn btn-danger btn-lg" onclick="initiateReset()">
+                            <svg class="bi me-2" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
+                                <path d="M8 3a5 5 0 1 0 4.546-2.914.5.5 0 0 1 .154-.77A6 6 0 1 1 8 2v1z"/>
+                                <path d="M8 4.754a.75.75 0 0 0-.949.468l-1.5 4a.75.75 0 0 0 1.409.557l1.047-2.793 1.043 2.793a.75.75 0 1 0 1.409-.557l-1.5-4a.75.75 0 0 0-.452-.468z"/>
+                            </svg>
+                            Reset All Data
+                        </button>
+
+                        <div id="resetStatus" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- Information Section -->
+                <div class="card section-card border-secondary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">About Your Data</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>What's Included in Backups:</h6>
+                        <ul class="mb-3">
+                            <li><strong>Student Profiles</strong> - Names, addresses, folder paths</li>
+                            <li><strong>Vendor Information</strong> - Instructor names, contact info, addresses, tax rates, ClassWallet search terms</li>
+                            <li><strong>Reimbursement Templates</strong> - Saved form templates organized by student</li>
+                            <li><strong>Curriculum Templates</strong> - ChatGPT curriculum templates for each student</li>
+                            <li><strong>Submission History</strong> - Complete audit trail of all submissions with dates and amounts</li>
+                            <li><strong>Settings</strong> - Application preferences like auto-submit configuration</li>
+                        </ul>
+
+                        <h6>What's NOT Included (For Security):</h6>
+                        <ul class="mb-3">
+                            <li><strong>ESA Credentials</strong> - Your ClassWallet username and password (stored locally, never backed up)</li>
+                            <li><strong>Invoice Files</strong> - Generated Excel and PDF files (can be regenerated)</li>
+                            <li><strong>Temporary Files</strong> - Temporary uploads and splits (system cleanup)</li>
+                        </ul>
+
+                        <h6>Data Privacy:</h6>
+                        <p class="mb-0 text-muted">
+                            All data is stored locally on your computer in JSON files located in the <code>data/</code> folder.
+                            Export files are plain text JSON that you can open and read. They are never sent to external servers.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Usage Examples -->
+                <div class="card section-card border-warning border-start border-5">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Common Use Cases</h5>
+                    </div>
+                    <div class="card-body">
+                        <h6>Backup Your Data Regularly</h6>
+                        <p>Create monthly backups to protect against data loss. Store them in cloud storage or email them to yourself.</p>
+
+                        <h6>Transfer to a New Computer</h6>
+                        <p>Export from your old computer, then import on your new one. All student, vendor, and template data transfers.</p>
+
+                        <h6>Share With Family Members</h6>
+                        <p>Export your data and send the JSON file to another family member. They can import it into their ESA Helper installation
+                        and customize it for their needs.</p>
+
+                        <h6>Merge Data From Multiple Sources</h6>
+                        <p>Import data from different installations. Templates and vendors can be combined across multiple ESA Helper setups.</p>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function exportData() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.innerHTML = 'Downloading...';
+
+            fetch('/api/data/export')
+                .then(response => response.json())
+                .then(data => {
+                    // Create a blob from the JSON data
+                    const jsonString = JSON.stringify(data, null, 2);
+                    const blob = new Blob([jsonString], { type: 'application/json' });
+
+                    // Create a download link
+                    const url = window.URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+
+                    // Use current date in filename
+                    const now = new Date();
+                    const dateStr = now.toISOString().split('T')[0];
+                    const filename = `esa-helper-backup-${dateStr}.json`;
+
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(url);
+
+                    // Show success message
+                    document.getElementById('exportFileName').textContent = filename;
+                    document.getElementById('exportStatus').style.display = 'block';
+
+                    // Scroll to status
+                    document.getElementById('exportStatus').scrollIntoView({ behavior: 'smooth' });
+
+                    // Re-enable button
+                    btn.disabled = false;
+                    btn.innerHTML = '📥 Download Backup File';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(`Error exporting data: ${error.message}`);
+                    btn.disabled = false;
+                    btn.innerHTML = '📥 Download Backup File';
+                });
+        }
+
+        // Store the parsed import data globally
+        let importFileData = null;
+
+        function loadImportPreview(event) {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) {
+                document.getElementById('importCategories').style.display = 'none';
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    importFileData = JSON.parse(e.target.result);
+
+                    // Update counts for each category
+                    document.getElementById('students_count').textContent =
+                        importFileData.students?.length ? `${importFileData.students.length} students` : 'No data found';
+                    document.getElementById('vendors_count').textContent =
+                        importFileData.vendors?.length ? `${importFileData.vendors.length} vendors` : 'No data found';
+
+                    // Templates can be either dict (new format) or list (old format)
+                    let templateCount = 'No data found';
+                    if (importFileData.templates) {
+                        if (Array.isArray(importFileData.templates)) {
+                            // Old format: list of templates
+                            templateCount = `${importFileData.templates.length} templates`;
+                        } else if (typeof importFileData.templates === 'object') {
+                            // New format: dict by student_id
+                            const studentsWithTemplates = Object.keys(importFileData.templates)
+                                .filter(key => importFileData.templates[key]?.length > 0).length;
+                            templateCount = studentsWithTemplates > 0 ? `${studentsWithTemplates} students with templates` : 'No data found';
+                        }
+                    }
+                    document.getElementById('templates_count').textContent = templateCount;
+
+                    // Submission history can be either list (old format) or dict with submissions key (new format)
+                    let submissionCount = 'No data found';
+                    if (importFileData.submission_history) {
+                        if (Array.isArray(importFileData.submission_history)) {
+                            // Old format: direct list
+                            submissionCount = `${importFileData.submission_history.length} submissions`;
+                        } else if (importFileData.submission_history.submissions?.length) {
+                            // New format: dict with submissions key
+                            submissionCount = `${importFileData.submission_history.submissions.length} submissions`;
+                        }
+                    }
+                    document.getElementById('submission_count').textContent = submissionCount;
+
+                    // Count curriculum templates
+                    const curriculumCount = Object.keys(importFileData.curriculum_templates || {})
+                        .filter(key => importFileData.curriculum_templates[key].length > 0).length;
+                    document.getElementById('curriculum_count').textContent =
+                        curriculumCount ? `${curriculumCount} students` : 'No data found';
+
+                    document.getElementById('settings_count').textContent =
+                        Object.keys(importFileData.settings || {}).length ? 'Found' : 'No data found';
+
+                    // Show import categories section
+                    document.getElementById('importCategories').style.display = 'block';
+                    document.getElementById('importCategories').scrollIntoView({ behavior: 'smooth' });
+                } catch (error) {
+                    alert(`Error reading file: ${error.message}`);
+                    document.getElementById('importCategories').style.display = 'none';
+                    importFileData = null;
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function selectAllImport() {
+            document.querySelectorAll('.import-category').forEach(cb => cb.checked = true);
+        }
+
+        function deselectAllImport() {
+            document.querySelectorAll('.import-category').forEach(cb => cb.checked = false);
+        }
+
+        function initiateReset() {
+            // First confirmation dialog
+            const firstConfirm = confirm(
+                'Are you sure you want to reset ALL data?\n\n' +
+                'This will DELETE:\n' +
+                '• All student profiles\n' +
+                '• All vendor information\n' +
+                '• All templates\n' +
+                '• All submission history\n\n' +
+                'Your ClassWallet credentials will be preserved.\n\n' +
+                'This action CANNOT be undone.'
+            );
+
+            if (!firstConfirm) {
+                return;
+            }
+
+            // Second confirmation dialog for extra safety
+            const secondConfirm = confirm(
+                'This is your last chance. Are you absolutely sure?\n\n' +
+                'Type "RESET ALL DATA" in the prompt below to confirm.'
+            );
+
+            if (!secondConfirm) {
+                return;
+            }
+
+            // Third check - require typing confirmation string
+            const userInput = prompt('Type the phrase exactly: RESET ALL DATA', '');
+
+            if (userInput !== 'RESET ALL DATA') {
+                alert('Reset cancelled. You did not type the exact confirmation phrase.');
+                return;
+            }
+
+            // Perform the reset
+            performReset();
+        }
+
+        function performReset() {
+            const btn = document.querySelector('button[onclick="initiateReset()"]');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Resetting...';
+
+            fetch('/api/data/reset', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirmed: true })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success || result.message) {
+                    // Build summary of reset items
+                    let summary = '<ul class="mt-2 mb-0">';
+                    if (result.results) {
+                        if (result.results.students) summary += '<li>✓ Students cleared</li>';
+                        if (result.results.vendors) summary += '<li>✓ Vendors cleared</li>';
+                        if (result.results.templates) summary += '<li>✓ Templates cleared</li>';
+                        if (result.results.curriculum_templates) summary += '<li>✓ Curriculum templates cleared</li>';
+                        if (result.results.logs) summary += '<li>✓ Log files cleared</li>';
+                    }
+                    summary += '</ul>';
+
+                    document.getElementById('resetStatus').innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>✓ Reset Complete!</strong> ${result.message}
+                            ${summary}
+                            <br>
+                            <small>Page will refresh in 3 seconds to show the changes.</small>
+                        </div>
+                    `;
+                    document.getElementById('resetStatus').style.display = 'block';
+
+                    // Scroll to status
+                    document.getElementById('resetStatus').scrollIntoView({ behavior: 'smooth' });
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('resetStatus').innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>✗ Reset Failed:</strong> ${error.message}
+                    </div>
+                `;
+                document.getElementById('resetStatus').style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+        }
+
+        function importData(event) {
+            event.preventDefault();
+
+            if (!importFileData) {
+                alert('Please select and load a file first');
+                return;
+            }
+
+            // Get selected categories
+            const import_categories = Array.from(document.querySelectorAll('.import-category:checked'))
+                .map(cb => cb.value);
+
+            if (import_categories.length === 0) {
+                alert('Please select at least one category to import');
+                return;
+            }
+
+            if (!confirm('This will replace existing data with the same IDs. Continue?')) {
+                return;
+            }
+
+            const btn = event.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            btn.innerHTML = 'Importing...';
+
+            fetch('/api/data/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    data: importFileData,
+                    import_categories: import_categories
+                })
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.success || result.message) {
+                    // Build summary of imported items
+                    let summary = '';
+                    if (result.results) {
+                        if (result.results.students) summary += `<li>${result.results.students} students</li>`;
+                        if (result.results.vendors) summary += `<li>${result.results.vendors} vendors</li>`;
+                        if (result.results.templates) summary += `<li>Templates for ${result.results.templates} students</li>`;
+                        if (result.results.submission_history) summary += `<li>${result.results.submission_history} submission records</li>`;
+                        if (result.results.curriculum_templates) summary += `<li>Curriculum templates for ${result.results.curriculum_templates} students</li>`;
+                        if (result.results.settings) summary += `<li>Settings imported</li>`;
+                    }
+
+                    document.getElementById('importStatus').innerHTML = `
+                        <div class="alert alert-success">
+                            <strong>✓ Success!</strong> ${result.message}
+                            ${summary ? '<ul class="mb-0 mt-2">' + summary + '</ul>' : ''}
+                            <br>
+                            <small>Your data has been imported. Page will refresh in 2 seconds to show the changes.</small>
+                        </div>
+                    `;
+                    document.getElementById('importStatus').style.display = 'block';
+
+                    setTimeout(() => {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    throw new Error(result.error || 'Unknown error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('importStatus').innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>✗ Error:</strong> ${error.message}
+                    </div>
+                `;
+                document.getElementById('importStatus').style.display = 'block';
+                btn.disabled = false;
+                btn.innerHTML = '📤 Import Data';
+            });
+        }
+    </script>
+</body>
+</html>
