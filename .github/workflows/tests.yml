@@ -1,0 +1,113 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v2
+
+    - name: Install dependencies
+      run: uv sync --all-extras
+
+    - name: Lint with Python syntax check
+      run: python3 -m py_compile app/*.py
+      continue-on-error: true
+
+    - name: Run Python tests
+      run: uv run pytest tests/ -v --tb=short
+
+    - name: Run JavaScript tests (if Node available)
+      run: |
+        if [ -f package.json ]; then
+          npm install
+          npm test
+        fi
+      continue-on-error: true
+
+    - name: Generate coverage report
+      run: uv run pytest tests/ --cov=app --cov-report=xml --cov-report=term
+      continue-on-error: true
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      if: always()
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        fail_ci_if_error: false
+
+  code-quality:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Check file structure
+      run: |
+        echo "Checking repository structure..."
+        [ -d "app" ] && echo "✓ app directory exists" || echo "✗ app directory missing"
+        [ -f "main.py" ] && echo "✓ main.py exists" || echo "✗ main.py missing"
+        [ -f "pyproject.toml" ] && echo "✓ pyproject.toml exists" || echo "✗ pyproject.toml missing"
+        [ -d "tests" ] && echo "✓ tests directory exists" || echo "✗ tests directory missing"
+
+    - name: Verify no sensitive files committed
+      run: |
+        echo "Checking for sensitive files..."
+        if git log -p | grep -q "config.json\|password\|api_key"; then
+          echo "⚠ Warning: Possible sensitive data in git history"
+        else
+          echo "✓ No obvious sensitive data patterns found"
+        fi
+      continue-on-error: true
+
+    - name: Check documentation
+      run: |
+        echo "Verifying documentation..."
+        [ -f "README.md" ] && echo "✓ README.md exists" || echo "✗ README.md missing"
+        [ -f "CONTRIBUTING.md" ] && echo "✓ CONTRIBUTING.md exists" || echo "✗ CONTRIBUTING.md missing"
+        [ -f "SETUP.md" ] && echo "✓ SETUP.md exists" || echo "✗ SETUP.md missing"
+
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+      continue-on-error: true
+
+    - name: Upload Trivy results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+      continue-on-error: true
