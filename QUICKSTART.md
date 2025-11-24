@@ -23,7 +23,7 @@ uv sync
 ## Step 2: Start the Application
 
 ```bash
-python main.py
+uv run main.py
 ```
 
 You should see:
@@ -33,12 +33,22 @@ ESA Helper - ClassWallet Automation Tool
 ============================================================
 
 Starting Flask application...
-Open your browser and navigate to: http://localhost:5000
+Open your browser and navigate to: http://127.0.0.1:5000
 
 Press Ctrl+C to stop the server
 ```
 
-Your browser should automatically open to http://localhost:5000
+Your browser should automatically open to http://127.0.0.1:5000
+
+### Custom Port
+
+By default, the app runs on port 5000. To use a different port, set the `PORT` environment variable:
+
+```bash
+PORT=8080 uv run main.py
+```
+
+Or edit the `.env` file and change `PORT=5000` to your desired port.
 
 ## Step 3: Configure Credentials
 
@@ -200,7 +210,7 @@ launchctl unload ~/Library/LaunchAgents/com.esa-helper.plist
 7. **The app will now start automatically on login and restart if it crashes.**
 
 **To verify it's running:**
-- Press `Win+R`, type `localhost:5000`, and press Enter
+- Press `Win+R`, type `localhost:5000` (or the port you configured), and press Enter
 - You should see the ESA Helper app
 
 ### Linux: Using systemd
@@ -266,6 +276,8 @@ If the app crashes or stops, anyone can quickly restart it by clicking a bookmar
    EOF
    ```
 
+   **Note:** If you configured a custom port in `.env`, replace `5000` with your port number in the `open` command.
+
 2. **Make it executable:**
 
    ```bash
@@ -290,18 +302,22 @@ If the app crashes or stops, anyone can quickly restart it by clicking a bookmar
 
    Replace `C:\path\to\ESA-Helpers` with your actual project path.
 
+   **Note:** If you configured a custom port in `.env`, replace `5000` with your port number in the `start http://localhost:5000` line.
+
 2. **Double-click the batch file to restart** – it will kill Python, restart the app, and open it in your browser
 
 ### Browser Bookmark (All Platforms)
 
 Create a bookmark in your browser:
 - **Name:** ESA Helper
-- **URL:** `http://localhost:5000`
+- **URL:** `http://localhost:5000` (or your custom port from `.env`)
 
 If the app seems unresponsive, try:
 1. Click the bookmark to refresh
 2. Wait 5 seconds for the page to load
 3. If still not working, run the restart script
+
+**Note:** If you configured a custom port in `.env`, update the bookmark URL to match (e.g., `http://localhost:8080`)
 
 ## File Organization
 
@@ -337,8 +353,11 @@ python --version
 # Check if port 5000 is in use
 lsof -i :5000
 
+# If port 5000 is in use, run on a different port:
+PORT=8080 uv run main.py
+
 # Install missing dependencies
-pip install flask selenium pillow
+uv sync
 ```
 
 ### Credentials won't save

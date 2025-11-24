@@ -69,6 +69,12 @@ ESA Helper is a comprehensive web application that automates ESA (Education Savi
    ```
    The app will open automatically in your browser at `http://127.0.0.1:5000`
 
+   **Note:** The default port is 5000. To use a different port, set the `PORT` environment variable:
+   ```bash
+   PORT=8080 uv run main.py
+   ```
+   Or edit `.env` file and change `PORT=5000` to your desired port.
+
 ## System Requirements
 
 | Requirement | Details |
@@ -226,7 +232,11 @@ A: Yes! It works on all major operating systems. Just make sure Python, Chrome, 
 
 ### "Port 5000 already in use"
 - Another app is using port 5000
-- Either stop that app or modify `main.py` to use a different port
+- Use a different port via the `PORT` environment variable:
+  ```bash
+  PORT=8080 uv run main.py
+  ```
+- Or edit the `.env` file and change `PORT=5000` to your desired port (e.g., `PORT=8080`)
 
 ### "Module not found" error
 - Make sure you're using `uv run` not `python`

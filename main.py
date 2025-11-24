@@ -16,6 +16,13 @@ import subprocess
 import time
 from pathlib import Path
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed, use system environment variables
+
 # Add app directory to path
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -26,11 +33,15 @@ def main():
     """Start the Flask application"""
     app = create_app()
 
+    # Get port from environment variable, default to 5000
+    port = int(os.environ.get('PORT', 5000))
+    host = os.environ.get('HOST', '127.0.0.1')
+
     print("\n" + "=" * 60)
     print("ESA Helper - ClassWallet Automation Tool")
     print("=" * 60)
     print("\nStarting Flask application...")
-    print("Open your browser and navigate to: http://127.0.0.1:5000")
+    print(f"Open your browser and navigate to: http://{host}:{port}")
     print("\nPress Ctrl+C to stop the server\n")
 
     # Only open browser on the main process (not the reloader subprocess)
@@ -43,10 +54,10 @@ def main():
                 # Try to open with Chrome explicitly
                 subprocess.Popen([
                     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-                    'http://127.0.0.1:5000'
+                    f'http://{host}:{port}'
                 ])
             except Exception as e:
-                print(f"Note: Could not auto-open Chrome. Open http://127.0.0.1:5000 manually in Chrome")
+                print(f"Note: Could not auto-open Chrome. Open http://{host}:{port} manually in Chrome")
 
         # Start chrome opener in background
         import threading
@@ -54,7 +65,7 @@ def main():
         chrome_thread.start()
 
     # Start Flask development server
-    app.run(debug=True, host='127.0.0.1', port=5000, use_reloader=True)
+    app.run(debug=True, host=host, port=port, use_reloader=True)
 
 
 if __name__ == '__main__':
