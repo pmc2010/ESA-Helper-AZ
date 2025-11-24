@@ -1,4 +1,4 @@
-# Testing Guide for ESA-Helpers
+# Testing Guide for ESA-Helper-AZ
 
 ## Quick Start
 
