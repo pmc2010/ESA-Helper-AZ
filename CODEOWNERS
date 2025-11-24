@@ -1,0 +1,23 @@
+# CODEOWNERS file
+# This file determines who is required to review code changes to specific files/directories
+# GitHub will request reviews from the specified owners when PRs modify these files
+
+# Default: all changes require review from repository owner
+* @pmc2010
+
+# Core automation logic requires extra scrutiny
+/app/classwallet.py @pmc2010
+/app/automation.py @pmc2010
+
+# Tests should be reviewed for quality and coverage
+/tests/ @pmc2010
+
+# Security-related files
+/SECURITY.md @pmc2010
+
+# Setup and configuration
+/pyproject.toml @pmc2010
+/main.py @pmc2010
+
+# Documentation updates
+*.md @pmc2010
