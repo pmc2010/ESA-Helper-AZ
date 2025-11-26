@@ -258,8 +258,13 @@ def save_new_template():
             return jsonify({'error': 'Missing required fields: student_id, name, vendor_id'}), 400
 
         # Create template object
+        # Use provided ID if editing, otherwise generate new ID for creating
+        template_id = data.get('id')
+        if not template_id:
+            template_id = name.lower().replace(' ', '_') + '_' + datetime.now().strftime('%Y%m%d%H%M%S')
+
         template = {
-            'id': name.lower().replace(' ', '_') + '_' + datetime.now().strftime('%Y%m%d%H%M%S'),
+            'id': template_id,
             'name': name,
             'vendor_id': vendor_id,
             'request_type': data.get('request_type', 'Reimbursement'),

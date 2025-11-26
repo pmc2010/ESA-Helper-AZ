@@ -272,19 +272,48 @@ class ClassWalletAutomation:
             # Step 0: Check if student is already selected (appears in top-right corner)
             logger.info("\n0. Checking if student is already selected...")
             try:
-                # Look for the student name in the header/top-right area
-                student_header = self.driver.find_element(
+                # Look for the student name in the header area (top-right)
+                # Check for visible instances (not hidden in dropdown menus)
+                student_elements = self.driver.find_elements(
                     By.XPATH, f"//span[contains(text(), '{full_name}')]"
                 )
 
-                # Check if this is in the header (not in a dropdown)
-                parent = student_header.find_element(By.XPATH, "ancestor::header | ancestor::nav | ancestor::div[@role='banner']")
-                if parent:
-                    logger.info(f"✓ Student {full_name} is already selected!")
-                    logger.info(f"Student selection complete (no action needed)")
-                    return True
-            except:
+                logger.info(f"Found {len(student_elements)} element(s) containing '{full_name}'")
+
+                # If we found the student name, check if it's visible (not hidden in a dropdown)
+                for i, elem in enumerate(student_elements):
+                    is_displayed = elem.is_displayed()
+                    logger.info(f"  Element {i+1}: displayed={is_displayed}")
+
+                    if is_displayed:
+                        # Check if this element is NOT inside a dropdown/menu (more robust than pixel-based detection)
+                        try:
+                            # Look for dropdown/menu parent classes that indicate hidden state
+                            parent = elem.find_element(By.XPATH, "ancestor::*[1]")
+                            parent_classes = parent.get_attribute("class") or ""
+                            parent_role = parent.get_attribute("role") or ""
+
+                            # If it's in a hidden menu or dropdown, skip it
+                            if any(hidden_indicator in parent_classes.lower() for hidden_indicator in ['hidden', 'collapse', 'dropdown']):
+                                logger.info(f"    Element {i+1} is in a hidden dropdown, skipping")
+                                continue
+
+                            # If the parent is not a menu/dropdown, this is the visible student selector
+                            if 'menu' not in parent_role.lower():
+                                logger.info(f"✓ Student {full_name} is already selected!")
+                                logger.info(f"Student selection complete (no action needed)")
+                                return True
+                        except Exception as parent_check_error:
+                            # If we can't determine parent structure, assume it's the visible one
+                            logger.info(f"    Parent check inconclusive, assuming this is the visible instance")
+                            logger.info(f"✓ Student {full_name} is already selected!")
+                            logger.info(f"Student selection complete (no action needed)")
+                            return True
+
+                logger.info("Student not currently selected, will open dropdown...")
+            except Exception as e:
                 # Student not already selected, proceed with dropdown selection
+                logger.info(f"Exception during student check: {str(e)}")
                 logger.info("Student not currently selected, will open dropdown...")
                 pass
 
