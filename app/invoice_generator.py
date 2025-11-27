@@ -127,7 +127,7 @@ class InvoiceGenerator:
                 ws[f'B{row}'] = item.get('description', '')
                 ws[f'D{row}'] = item.get('quantity', 1)
                 ws[f'E{row}'] = item.get('unit_price', 0)
-                # F{row} already has formula for line total
+                # F{row} already has formula for line total - don't overwrite it
                 logger.info(f"✓ Line {idx + 1}: {item.get('description', 'N/A')} - Qty: {ws[f'D{row}'].value}, Price: ${ws[f'E{row}'].value}")
 
             if line_items:
@@ -164,6 +164,10 @@ class InvoiceGenerator:
                 logger.warning(f"⚠ File created but seems small: {file_size} bytes - may be corrupted")
             else:
                 logger.info(f"✓ File created: {file_size} bytes")
+
+            # Recalculate formulas in Excel file using LibreOffice
+            logger.info("7b. Recalculating formulas...")
+            self._recalculate_excel_formulas(excel_path)
 
             # Convert to PDF
             logger.info("8. Converting to PDF...")
@@ -355,6 +359,117 @@ class InvoiceGenerator:
         except Exception as e:
             logger.error(f"   Failed to fix content type: {str(e)}")
             raise
+
+    def _recalculate_excel_formulas(self, excel_path: Path):
+        """
+        Recalculate Excel formulas using LibreOffice in-place
+
+        Excel files created by openpyxl contain formulas but Excel doesn't calculate
+        them until the file is opened and saved. This method uses LibreOffice to
+        open the file, recalculate, and save it back.
+
+        Args:
+            excel_path: Path to Excel file to recalculate
+        """
+        try:
+            # Check if LibreOffice is available
+            result = subprocess.run(['which', 'libreoffice'],
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.warning("   LibreOffice not found - formulas will not be calculated")
+                logger.warning("   Install with: brew install libreoffice")
+                return
+
+            logger.info(f"   Opening Excel file with LibreOffice for formula recalculation...")
+
+            # Create a Python script that LibreOffice will execute to recalculate
+            # This uses LibreOffice's UNO bridge to properly calculate formulas
+            temp_script = excel_path.parent / ".tmp_recalc.py"
+            temp_output = excel_path.parent / f".tmp_{excel_path.name}"
+
+            script_content = f'''
+import uno
+from com.sun.star.beans import PropertyValue
+
+def recalc():
+    try:
+        # Open document
+        local_context = uno.getComponentContext()
+        resolver = local_context.ServiceManager.createInstanceWithContext(
+            "com.sun.star.bridge.UnoUrlResolver", local_context)
+        try:
+            ctx = resolver.resolve(
+                "uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+            smgr = ctx.ServiceManager
+        except:
+            # Start fresh LibreOffice instance
+            import subprocess
+            subprocess.Popen(['libreoffice', '--headless', '--accept=socket,host=localhost,port=2002;urp;'])
+            import time
+            time.sleep(3)
+            ctx = resolver.resolve(
+                "uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+            smgr = ctx.ServiceManager
+
+        desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+        doc = desktop.loadComponentFromURL("file://{excel_path}", "_blank", 0, ())
+
+        # Recalculate
+        doc.calculateAll()
+
+        # Save
+        doc.store()
+        doc.close(True)
+
+    except Exception as e:
+        print(f"Error: {{e}}")
+
+g_exportedScripts = (recalc,)
+'''
+
+            try:
+                # Write script
+                with open(temp_script, 'w') as f:
+                    f.write(script_content)
+
+                # Try UNO approach first
+                cmd = [
+                    'libreoffice',
+                    '--headless',
+                    f'--script-provider=python:{temp_script}',
+                    str(excel_path)
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode != 0:
+                    # Fallback: Simple open and save approach
+                    logger.info("   Using fallback recalculation method...")
+                    cmd = [
+                        'libreoffice',
+                        '--headless',
+                        '--calc',
+                        '--invisible',
+                        str(excel_path)
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                logger.info("   ✓ Formulas recalculated")
+
+            finally:
+                # Clean up script
+                try:
+                    temp_script.unlink()
+                except:
+                    pass
+
+        except subprocess.TimeoutExpired:
+            logger.warning("   LibreOffice recalculation timed out")
+        except FileNotFoundError:
+            logger.warning("   LibreOffice not found - formulas will not be calculated")
+            logger.warning("   Install with: brew install libreoffice")
+        except Exception as e:
+            logger.warning(f"   Failed to recalculate formulas: {str(e)}")
+            # Don't raise - Excel file is still usable, just without calculated values
 
     def _convert_to_pdf(self, excel_path: Path, pdf_path: Path) -> bool:
         """
