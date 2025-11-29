@@ -683,13 +683,23 @@ class ClassWalletAutomation:
             # (different: & vs "and", capitalization, en-dash vs hyphen)
 
             # Normalize the category name to match ClassWallet's format
-            category_normalized = category.replace(" & ", " and ").replace("&", "and")
-            category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
-            # ClassWallet uses lowercase for certain words in category names
-            category_normalized = category_normalized.replace("Hardware & Technological", "hardware and technological")
-            category_normalized = category_normalized.replace("and Teaching", "and teaching")
-            category_normalized = category_normalized.replace(" Devices", " devices")  # lowercase devices
-            category_normalized = category_normalized.replace("Supplemental Materials", "Supplemental Materials")  # Keep as-is
+            # ClassWallet uses specific capitalization patterns:
+            # "Computer Hardware & Technological Devices" → "Computer hardware and technological devices"
+            # "Tutoring & Teaching Services" → "Tutoring and teaching Services" (Services capitalized)
+
+            # First, do the specific replacements for known patterns
+            if category.startswith("Computer Hardware"):
+                # Computer Hardware category: all words after "Computer" are lowercase
+                category_normalized = "Computer hardware and technological devices"
+            elif "Tutoring" in category and "Teaching" in category:
+                # Tutoring categories: replace & with "and", but keep Services capitalized
+                category_normalized = category.replace(" & ", " and ").replace("&", "and")
+                category_normalized = category_normalized.replace("and Teaching", "and teaching")
+                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
+            else:
+                # Generic normalization for other categories
+                category_normalized = category.replace(" & ", " and ").replace("&", "and")
+                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
 
             logger.debug(f"Original category: {category}")
             logger.debug(f"Normalized category: {category_normalized}")
