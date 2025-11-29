@@ -850,9 +850,6 @@ class ClassWalletAutomation:
                     except Exception as input_error:
                         logger.error(f"Failed to click input: {str(input_error)}")
                         return False
-                except Exception as click_error:
-                    logger.error(f"Error clicking category: {str(click_error)}")
-                    return False
             else:
                 logger.info(f"✓ Category '{category}' already selected")
 
