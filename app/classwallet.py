@@ -676,6 +676,8 @@ class ClassWalletAutomation:
             logger.info(f"2. Selecting expense category: {category}...")
 
             # Note: Category names from the form may differ from ClassWallet's exact format:
+            # Form sends: "Computer Hardware & Technological Devices"
+            # ClassWallet has: "Computer hardware and technological devices"
             # Form sends: "Tutoring & Teaching Services - Accredited Individual"
             # ClassWallet has: "Tutoring and teaching Services – Accredited Individual"
             # (different: & vs "and", capitalization, en-dash vs hyphen)
@@ -683,8 +685,11 @@ class ClassWalletAutomation:
             # Normalize the category name to match ClassWallet's format
             category_normalized = category.replace(" & ", " and ").replace("&", "and")
             category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
-            # ClassWallet uses lowercase "teaching" after "and" in category names
+            # ClassWallet uses lowercase for certain words in category names
+            category_normalized = category_normalized.replace("Hardware & Technological", "hardware and technological")
             category_normalized = category_normalized.replace("and Teaching", "and teaching")
+            category_normalized = category_normalized.replace(" Devices", " devices")  # lowercase devices
+            category_normalized = category_normalized.replace("Supplemental Materials", "Supplemental Materials")  # Keep as-is
 
             logger.debug(f"Original category: {category}")
             logger.debug(f"Normalized category: {category_normalized}")
