@@ -1228,13 +1228,22 @@ let currentFileBrowserState = {
 
 // Get student-specific base path
 function getStudentBasePath() {
-    // Note: This is a fallback function.
-    // Actual paths should be configured in student profiles via "Manage Students"
+    // Get the student's configured folder path from their profile
     const studentId = document.getElementById('student').value;
-    const year = new Date().getFullYear();
 
-    // Generic base path - users should configure their own paths
-    return `/path/to/esa/${studentId.toLowerCase()}/${year}`;
+    if (!studentId || !studentsData) {
+        return '';
+    }
+
+    const student = studentsData.find(s => s.id === studentId);
+    if (student && student.folder) {
+        // Use the student's configured folder path
+        return student.folder;
+    }
+
+    // Fallback: placeholder path (should not reach here if student is properly configured)
+    console.warn(`No folder path configured for student: ${studentId}`);
+    return `/path/to/esa/${studentId.toLowerCase()}`;
 }
 
 /**
