@@ -502,24 +502,47 @@ g_exportedScripts = (recalc,)
 
             try:
                 # Write script - validate path safety one more time before write
+                # Use canonical path check with .relative_to() only (no fragile string prefix checks)
                 script_path_real = temp_script.resolve()
                 base_dir_real = BASE_OUTPUT_DIR.resolve()
-                if not str(script_path_real).startswith(str(base_dir_real) + ('' if str(base_dir_real).endswith('/') else '/')):
-                    # Additional check: ensure path is strictly contained
-                    try:
-                        script_path_real.relative_to(base_dir_real)
-                    except ValueError:
-                        raise ValueError(f"Attempted to write temp script outside of safe directory: {script_path_real}")
+                try:
+                    script_path_real.relative_to(base_dir_real)
+                except ValueError:
+                    raise ValueError(f"Attempted to write temp script outside of safe directory: {script_path_real}")
 
                 with open(temp_script, 'w') as f:
                     f.write(script_content)
+
+                # Validate excel_path before passing to subprocess
+                # Check: exists, not a symlink, within BASE_OUTPUT_DIR, safe filename
+                excel_path_real = excel_path.resolve()
+                base_dir_real = BASE_OUTPUT_DIR.resolve()
+
+                # Ensure it's within safe directory
+                try:
+                    excel_path_real.relative_to(base_dir_real)
+                except ValueError:
+                    raise ValueError(f"Excel path is not within safe output directory: {excel_path_real}")
+
+                # Reject symlinks to prevent symlink attacks
+                if excel_path_real.is_symlink():
+                    raise ValueError(f"Excel file is a symlink, refusing to process: {excel_path_real}")
+
+                # Check file exists
+                if not excel_path_real.exists():
+                    raise ValueError(f"Excel file does not exist: {excel_path_real}")
+
+                # Validate filename matches safe pattern (alphanumerics, underscore, hyphen, dot, .xlsx extension)
+                safe_filename_pattern = re.compile(r'^[a-zA-Z0-9_\-]+\.xlsx$')
+                if not safe_filename_pattern.match(excel_path_real.name):
+                    raise ValueError(f"Unsafe excel filename: {excel_path_real.name}")
 
                 # Try UNO approach first
                 cmd = [
                     'libreoffice',
                     '--headless',
                     f'--script-provider=python:{temp_script}',
-                    str(excel_path)
+                    str(excel_path_real)
                 ]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
@@ -531,16 +554,20 @@ g_exportedScripts = (recalc,)
                         '--headless',
                         '--calc',
                         '--invisible',
-                        str(excel_path)
+                        str(excel_path_real)
                     ]
                     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
 
                 logger.info("   ✓ Formulas recalculated")
 
             finally:
-                # Clean up script
+                # Clean up script - validate before deleting
                 try:
+                    # Validate path is safe to delete (within BASE_OUTPUT_DIR)
+                    self._validate_output_path(temp_script, BASE_OUTPUT_DIR)
                     temp_script.unlink()
+                except ValueError as ve:
+                    logger.error(f"Security validation failed before temp script cleanup: {ve}")
                 except:
                     pass
 
