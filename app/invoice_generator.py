@@ -24,21 +24,57 @@ TEMPLATE_PATH = Path(__file__).parent / "templates" / "invoice_template.xltx"
 BASE_OUTPUT_DIR = Path(__file__).parent.parent / "data" / "invoices"
 
 
-def sanitize_filename(name: str) -> str:
+def sanitize_filename(name: str, extension: str = None) -> str:
     """
     Sanitize input for use in a filename.
-    Allows only alphanumerics, underscores, and hyphens.
-    Prevents path traversal and dotfile attacks.
+    Only allows alphanumerics, underscores, and hyphens (strict).
+    Prevents path traversal, dotfile attacks, and command-line option injection.
+
+    Args:
+        name: Input filename to sanitize
+        extension: Optional file extension to enforce (e.g., "xlsx", "pdf")
+
+    Returns:
+        Safe filename or raises ValueError if input is invalid
+
+    Raises:
+        ValueError: If filename cannot be safely sanitized
     """
     if not name:
         return "file"
-    # Replace spaces and unsafe characters with underscore
-    sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(name))
-    # Remove leading dots and slashes to prevent dotfiles and paths
-    sanitized = sanitized.lstrip('._/')
+
+    sanitized = str(name).strip()
+
+    # Strict whitelist: only alphanumerics, underscores, hyphens
+    # This rejects all special characters, spaces, dots, etc.
+    if not re.fullmatch(r'[a-zA-Z0-9_\-]+', sanitized):
+        # Fall back to replacing unsafe characters with underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', sanitized)
+
+    # Remove leading dots, dashes, slashes - prevent dotfiles and option confusion
+    sanitized = sanitized.lstrip('._-/')
+
+    # Reject if still starts with problematic characters
+    while sanitized and sanitized[0] in '.-/':
+        sanitized = sanitized[1:]
+
     # Ensure not empty
     if not sanitized:
         sanitized = "file"
+
+    # Collapse consecutive hyphens
+    sanitized = re.sub(r'-+', '-', sanitized)
+
+    # Optionally enforce a file extension
+    if extension:
+        # Remove any existing extension first
+        sanitized = re.sub(r'\.[a-zA-Z0-9]+$', '', sanitized)
+        # Add the enforced extension
+        ext_clean = extension.lstrip('.')
+        if not re.fullmatch(r'[a-zA-Z0-9]+', ext_clean):
+            raise ValueError(f"Invalid extension: {extension}")
+        sanitized = f"{sanitized}.{ext_clean}"
+
     return sanitized
 
 
@@ -164,13 +200,15 @@ class InvoiceGenerator:
             # Save Excel file
             logger.info("7. Saving Excel file...")
             # Create filename with timestamp and vendor name
+            # Use strict sanitization with enforced .xlsx extension
             invoice_number = sanitize_filename(str(invoice_data.get('invoice_number', 'invoice')))
             vendor_name = sanitize_filename(str(vendor_data.get('name', 'vendor')).lower())
-            excel_filename = f"{invoice_number}_{vendor_name}_inv.xlsx"
+            # Sanitize the combined filename and enforce extension
+            excel_filename = sanitize_filename(f"{invoice_number}_{vendor_name}_inv", extension="xlsx")
             excel_path = output_path / excel_filename
 
-            # Validate that excel_path stays within output_path (prevent path traversal)
-            self._validate_output_path(excel_path, output_path)
+            # Validate that excel_path stays within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(excel_path, BASE_OUTPUT_DIR)
 
             # Save Excel file - preserve template structure to avoid corruption
             try:
@@ -196,11 +234,12 @@ class InvoiceGenerator:
 
             # Convert to PDF
             logger.info("8. Converting to PDF...")
-            pdf_filename = f"{invoice_number}_{vendor_name}_inv.pdf"
+            # Sanitize with enforced .pdf extension
+            pdf_filename = sanitize_filename(f"{invoice_number}_{vendor_name}_inv", extension="pdf")
             pdf_path = output_path / pdf_filename
 
-            # Validate that pdf_path stays within output_path (prevent path traversal)
-            self._validate_output_path(pdf_path, output_path)
+            # Validate that pdf_path stays within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(pdf_path, BASE_OUTPUT_DIR)
 
             if self._convert_to_pdf(excel_path, pdf_path):
                 logger.info(f"✓ Saved: {pdf_path}")
@@ -412,12 +451,14 @@ class InvoiceGenerator:
 
             # Create a Python script that LibreOffice will execute to recalculate
             # This uses LibreOffice's UNO bridge to properly calculate formulas
-            temp_script = excel_path.parent / ".tmp_recalc.py"
-            temp_output = excel_path.parent / f".tmp_{excel_path.name}"
+            # Use sanitized filenames for temp files
+            safe_excel_name = sanitize_filename(excel_path.stem)
+            temp_script = excel_path.parent / f".tmp_{safe_excel_name}_recalc.py"
+            temp_output = excel_path.parent / f".tmp_{safe_excel_name}"
 
-            # Validate temp script and output paths are within the safe directory
-            self._validate_output_path(temp_script, excel_path.parent)
-            self._validate_output_path(temp_output, excel_path.parent)
+            # Validate temp script and output paths are within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(temp_script, BASE_OUTPUT_DIR)
+            self._validate_output_path(temp_output, BASE_OUTPUT_DIR)
 
             script_content = f'''
 import uno
@@ -460,7 +501,16 @@ g_exportedScripts = (recalc,)
 '''
 
             try:
-                # Write script
+                # Write script - validate path safety one more time before write
+                script_path_real = temp_script.resolve()
+                base_dir_real = BASE_OUTPUT_DIR.resolve()
+                if not str(script_path_real).startswith(str(base_dir_real) + ('' if str(base_dir_real).endswith('/') else '/')):
+                    # Additional check: ensure path is strictly contained
+                    try:
+                        script_path_real.relative_to(base_dir_real)
+                    except ValueError:
+                        raise ValueError(f"Attempted to write temp script outside of safe directory: {script_path_real}")
+
                 with open(temp_script, 'w') as f:
                     f.write(script_content)
 

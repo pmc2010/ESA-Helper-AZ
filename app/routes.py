@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions
 from app.invoice_generator import (
     InvoiceGenerator, load_vendor_profiles, load_student_profiles,
-    get_vendor, get_student, save_vendor_profile, save_student_profile
+    get_vendor, get_student, save_vendor_profile, save_student_profile,
+    BASE_OUTPUT_DIR, sanitize_filename
 )
 
 # Create blueprints
@@ -852,8 +853,11 @@ def generate_invoice():
         student_name = student.get('name', '')
         logger.info(f"Invoice generation - Student ID: '{data['student']}' -> Full name: '{student_name}'")
 
-        # Get student folder for current year
-        output_dir = Path(student['folder']) / str(datetime.now().year)
+        # Securely construct output directory: always under BASE_OUTPUT_DIR with sanitized student ID & year
+        # This prevents path traversal attacks through student['folder']
+        student_id_sanitized = sanitize_filename(student['id'])
+        year = str(datetime.now().year)
+        output_dir = BASE_OUTPUT_DIR / student_id_sanitized / year
 
         # Get vendor profile
         vendor = get_vendor(data['vendor_name'])
