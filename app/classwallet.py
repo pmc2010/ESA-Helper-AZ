@@ -286,23 +286,35 @@ class ClassWalletAutomation:
                     logger.info(f"  Element {i+1}: displayed={is_displayed}")
 
                     if is_displayed:
-                        # Check if this element is NOT inside a dropdown/menu (more robust than pixel-based detection)
+                        # Check if this element is NOT inside a hidden dropdown/menu
                         try:
-                            # Look for dropdown/menu parent classes that indicate hidden state
-                            parent = elem.find_element(By.XPATH, "ancestor::*[1]")
-                            parent_classes = parent.get_attribute("class") or ""
-                            parent_role = parent.get_attribute("role") or ""
+                            # Check if any parent element is actually hidden
+                            parents = elem.find_elements(By.XPATH, "ancestor::*")
+                            is_hidden = False
 
-                            # If it's in a hidden menu or dropdown, skip it
-                            if any(hidden_indicator in parent_classes.lower() for hidden_indicator in ['hidden', 'collapse', 'dropdown']):
-                                logger.info(f"    Element {i+1} is in a hidden dropdown, skipping")
+                            for parent in parents[:5]:  # Check first 5 parent levels
+                                parent_classes = parent.get_attribute("class") or ""
+                                parent_style = parent.get_attribute("style") or ""
+
+                                # Check for explicit hidden indicators
+                                if any(x in parent_classes.lower() for x in ['d-none', 'hidden', 'invisible']):
+                                    is_hidden = True
+                                    logger.info(f"    Element {i+1}: Found hidden class in parent")
+                                    break
+                                if 'display: none' in parent_style.lower():
+                                    is_hidden = True
+                                    logger.info(f"    Element {i+1}: Found display:none in parent style")
+                                    break
+
+                            if is_hidden:
+                                logger.info(f"    Element {i+1} is in a hidden menu, skipping")
                                 continue
 
-                            # If the parent is not a menu/dropdown, this is the visible student selector
-                            if 'menu' not in parent_role.lower():
-                                logger.info(f"✓ Student {full_name} is already selected!")
-                                logger.info(f"Student selection complete (no action needed)")
-                                return True
+                            # If we get here, the element is visible and not hidden
+                            logger.info(f"✓ Student {full_name} is already selected!")
+                            logger.info(f"Student selection complete (no action needed)")
+                            return True
+
                         except Exception as parent_check_error:
                             # If we can't determine parent structure, assume it's the visible one
                             logger.info(f"    Parent check inconclusive, assuming this is the visible instance")
