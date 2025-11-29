@@ -38,9 +38,64 @@ def cleanup_test_submissions():
     # This runs before any tests
     yield
     # This runs after all tests are complete
-    print("\n\n🧹 Cleaning up test submissions (created_by='test')...")
+    import os
+    from pathlib import Path
+
+    print("\n\n🧹 Cleaning up test submissions...")
+
+    # Delete test submission JSON files
+    logs_dir = Path('logs')
+    if logs_dir.exists():
+        test_files_deleted = 0
+        for f in logs_dir.glob('submission_*.json'):
+            if f.name == 'submission_history.json':
+                continue
+            try:
+                with open(f) as file:
+                    content = file.read()
+                    # Delete files containing test data or sample students
+                    if ('"Test' in content or 'Test Category' in content or
+                        'Student A' in content or 'Student B' in content or
+                        'Student C' in content):
+                        f.unlink()
+                        test_files_deleted += 1
+            except:
+                pass
+
+        if test_files_deleted > 0:
+            print(f"   Deleted {test_files_deleted} test submission files")
+
+    # Delete submissions marked with created_by='test' from history
     result = delete_all_submissions(created_by_filter='test')
-    print(f"   {result['message']}\n")
+    if 'Deleted 0' not in result['message']:
+        print(f"   {result['message']}")
+
+    # Also clean up history file from sample submissions
+    try:
+        history_file = logs_dir / 'submission_history.json'
+        if history_file.exists():
+            import json
+            with open(history_file) as f:
+                data = json.load(f)
+
+            submissions = data.get('submissions', [])
+            original_count = len(submissions)
+
+            # Remove sample student submissions
+            cleaned = [
+                s for s in submissions
+                if s.get('student', '') not in ['Student A', 'Student B', 'Student C']
+            ]
+
+            if len(cleaned) < original_count:
+                data['submissions'] = cleaned
+                with open(history_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+                print(f"   Removed {original_count - len(cleaned)} sample submissions from history")
+    except:
+        pass
+
+    print()
 
 
 @pytest.fixture
