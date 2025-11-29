@@ -81,6 +81,34 @@ def sanitize_filename(name: str, extension: str = None) -> str:
 class InvoiceGenerator:
     """Generate invoices from template with vendor and student data"""
 
+    def _is_path_safe(self, target_path: Path, base_dir: Path) -> bool:
+        """
+        Check that no part of the target_path under base_dir is a symlink.
+        Prevents symlink-based directory traversal attacks.
+
+        Args:
+            target_path: Path to check for symlinks
+            base_dir: Base directory that target_path must be within
+
+        Returns:
+            True if safe (no symlinks in path chain), False otherwise
+        """
+        try:
+            target_path_resolved = target_path.resolve()
+            base_dir_resolved = base_dir.resolve()
+        except Exception:
+            return False
+
+        # Walk up from target_path's parent to base_dir, checking for symlinks
+        current = target_path_resolved
+        while current != base_dir_resolved and current != current.parent:
+            # Check if the current directory component is a symlink
+            if current.is_symlink():
+                return False
+            current = current.parent
+
+        return True
+
     def __init__(self):
         """Initialize invoice generator"""
         if not TEMPLATE_PATH.exists():
@@ -510,11 +538,12 @@ g_exportedScripts = (recalc,)
                 except ValueError:
                     raise ValueError(f"Attempted to write temp script outside of safe directory: {script_path_real}")
 
-                with open(temp_script, 'w') as f:
+                # Only use the validated canonical path for file operations
+                with open(script_path_real, 'w') as f:
                     f.write(script_content)
 
                 # Validate excel_path before passing to subprocess
-                # Check: exists, not a symlink, within BASE_OUTPUT_DIR, safe filename
+                # Check: exists, not a symlink, within BASE_OUTPUT_DIR, safe filename, allowlist
                 excel_path_real = excel_path.resolve()
                 base_dir_real = BASE_OUTPUT_DIR.resolve()
 
@@ -524,9 +553,13 @@ g_exportedScripts = (recalc,)
                 except ValueError:
                     raise ValueError(f"Excel path is not within safe output directory: {excel_path_real}")
 
-                # Reject symlinks to prevent symlink attacks
+                # Reject symlinks to prevent symlink attacks - check file and all parent directories
                 if excel_path_real.is_symlink():
                     raise ValueError(f"Excel file is a symlink, refusing to process: {excel_path_real}")
+
+                # Check that NO parent directory (up to base_dir_real) is a symlink
+                if not self._is_path_safe(excel_path_real, base_dir_real):
+                    raise ValueError(f"Excel file path or parent directories contain unsafe symlink: {excel_path_real}")
 
                 # Check file exists
                 if not excel_path_real.exists():
@@ -537,11 +570,22 @@ g_exportedScripts = (recalc,)
                 if not safe_filename_pattern.match(excel_path_real.name):
                     raise ValueError(f"Unsafe excel filename: {excel_path_real.name}")
 
+                # ALLOWLIST: Only allow exactly the file we created (defense in depth)
+                # This ensures the file passed to subprocess is the one we just created
+                if excel_path_real != excel_path.resolve():
+                    raise ValueError("Attempted recalculation on a path not just created by this process")
+
+                # Validate temp_script filename pattern before subprocess
+                # Ensure temp script is only the file we created with expected naming
+                temp_script_pattern = re.compile(r'^\.tmp_[a-zA-Z0-9_\-]+_recalc\.py$')
+                if not temp_script_pattern.match(script_path_real.name):
+                    raise ValueError(f"Unsafe temp script filename: {script_path_real.name}")
+
                 # Try UNO approach first
                 cmd = [
                     'libreoffice',
                     '--headless',
-                    f'--script-provider=python:{temp_script}',
+                    f'--script-provider=python:{str(script_path_real)}',
                     str(excel_path_real)
                 ]
                 result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
@@ -561,11 +605,12 @@ g_exportedScripts = (recalc,)
                 logger.info("   ✓ Formulas recalculated")
 
             finally:
-                # Clean up script - validate before deleting
+                # Clean up script - validate before deleting using resolved path
                 try:
-                    # Validate path is safe to delete (within BASE_OUTPUT_DIR)
-                    self._validate_output_path(temp_script, BASE_OUTPUT_DIR)
-                    temp_script.unlink()
+                    # Validate using normalized (resolved) path before deleting
+                    temp_script_real = temp_script.resolve()
+                    self._validate_output_path(temp_script_real, BASE_OUTPUT_DIR.resolve())
+                    temp_script_real.unlink()
                 except ValueError as ve:
                     logger.error(f"Security validation failed before temp script cleanup: {ve}")
                 except:
