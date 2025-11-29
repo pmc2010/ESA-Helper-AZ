@@ -9,15 +9,37 @@ import json
 import subprocess
 import zipfile
 import shutil
+import re
 from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
 # Path to template - relative to this file's location
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "invoice_template.xltx"
+# Define safe base directory for invoice output
+BASE_OUTPUT_DIR = Path(__file__).parent.parent / "data" / "invoices"
+
+
+def sanitize_filename(name: str) -> str:
+    """
+    Sanitize input for use in a filename.
+    Allows only alphanumerics, underscores, and hyphens.
+    Prevents path traversal and dotfile attacks.
+    """
+    if not name:
+        return "file"
+    # Replace spaces and unsafe characters with underscore
+    sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(name))
+    # Remove leading dots and slashes to prevent dotfiles and paths
+    sanitized = sanitized.lstrip('._/')
+    # Ensure not empty
+    if not sanitized:
+        sanitized = "file"
+    return sanitized
 
 
 class InvoiceGenerator:
@@ -142,10 +164,13 @@ class InvoiceGenerator:
             # Save Excel file
             logger.info("7. Saving Excel file...")
             # Create filename with timestamp and vendor name
-            invoice_number = invoice_data.get('invoice_number', 'invoice')
-            vendor_name = vendor_data.get('name', 'vendor').lower().replace(' ', '_')
+            invoice_number = sanitize_filename(str(invoice_data.get('invoice_number', 'invoice')))
+            vendor_name = sanitize_filename(str(vendor_data.get('name', 'vendor')).lower())
             excel_filename = f"{invoice_number}_{vendor_name}_inv.xlsx"
             excel_path = output_path / excel_filename
+
+            # Validate that excel_path stays within output_path (prevent path traversal)
+            self._validate_output_path(excel_path, output_path)
 
             # Save Excel file - preserve template structure to avoid corruption
             try:
@@ -173,6 +198,9 @@ class InvoiceGenerator:
             logger.info("8. Converting to PDF...")
             pdf_filename = f"{invoice_number}_{vendor_name}_inv.pdf"
             pdf_path = output_path / pdf_filename
+
+            # Validate that pdf_path stays within output_path (prevent path traversal)
+            self._validate_output_path(pdf_path, output_path)
 
             if self._convert_to_pdf(excel_path, pdf_path):
                 logger.info(f"✓ Saved: {pdf_path}")
@@ -387,6 +415,10 @@ class InvoiceGenerator:
             temp_script = excel_path.parent / ".tmp_recalc.py"
             temp_output = excel_path.parent / f".tmp_{excel_path.name}"
 
+            # Validate temp script and output paths are within the safe directory
+            self._validate_output_path(temp_script, excel_path.parent)
+            self._validate_output_path(temp_output, excel_path.parent)
+
             script_content = f'''
 import uno
 from com.sun.star.beans import PropertyValue
@@ -551,6 +583,37 @@ g_exportedScripts = (recalc,)
         except Exception as e:
             logger.error(f"   PDF conversion error: {str(e)}")
             return False
+
+    def _validate_output_path(self, path: Path, base_dir: Path) -> None:
+        """
+        Validate that path is strictly contained within base_dir.
+        Prevents path traversal attacks.
+
+        Args:
+            path: The path to validate
+            base_dir: The base directory that path must be within
+
+        Raises:
+            ValueError: If path escapes base_dir
+        """
+        try:
+            base_dir_resolved = base_dir.resolve()
+            path_resolved = path.resolve()
+
+            # Use is_relative_to (Python 3.9+) for robust containment check
+            # This prevents false positives from startswith() checks
+            try:
+                path_resolved.relative_to(base_dir_resolved)
+                logger.debug(f"Path validation passed: {path_resolved}")
+            except ValueError:
+                logger.error(f"Path validation failed: {path_resolved} is not within {base_dir_resolved}")
+                raise ValueError(f"Unsafe path: {path} must be within {base_dir}")
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Path validation error: {str(e)}")
+            raise ValueError(f"Failed to validate path {path}: {str(e)}")
 
 
 def load_vendor_profiles() -> list:
