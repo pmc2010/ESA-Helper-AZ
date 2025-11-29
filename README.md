@@ -6,6 +6,59 @@ ESA Helper is a comprehensive desktop application that automates Empowerment Sch
 
 **Keywords**: Arizona ESA | Empowerment Scholarship Account | ClassWallet Automation | ESA Reimbursement | Arizona Educational | Direct Pay Automation
 
+---
+
+## ⚠️ Disclaimer & No Warranty
+
+**IMPORTANT: Please read this carefully before using ESA Helper.**
+
+### No Affiliation
+This tool is **not affiliated with, endorsed by, or officially connected to:**
+- ClassWallet (the payment platform)
+- The State of Arizona
+- The Arizona Department of Education
+- The Arizona ESA program or any government agency
+
+This is an **independent, third-party automation tool** created to help families manage their ESA submissions.
+
+### No Guarantees or Warranties
+**USE AT YOUR OWN RISK.** This software is provided "as-is" with:
+- **No warranty** of any kind, express or implied
+- **No guarantee** it will work with future versions of ClassWallet
+- **No liability** for any loss, damage, or incorrect submissions
+- **No support** beyond community help
+
+### Your Responsibility
+You are entirely responsible for:
+- Verifying that all submissions are correct before they're processed
+- Ensuring you comply with all Arizona ESA program rules and requirements
+- Checking your ClassWallet account after submissions to confirm they worked
+- Keeping your credentials and data secure
+- Backing up your data regularly
+
+### Important Notes
+- **ClassWallet updates may break the tool** - If ClassWallet changes their interface, this tool may stop working until selectors are updated
+- **Always verify submissions manually** - Don't assume the tool worked correctly; check ClassWallet to confirm
+- **Test with small amounts first** - Use templates and test submissions before processing large amounts
+- **Keep records** - Maintain your own records of all submissions independent of this tool
+
+### What We've Done Right
+The creator of this tool:
+- **Uses it personally** with their own ESA account and family
+- **Has tested thoroughly** across multiple submission types and scenarios
+- **Made significant efforts** to ensure reliability and security
+- **Maintains the code** and fixes issues as they're discovered
+- **Shares the code openly** so you can audit it and understand what it does
+
+### If Something Goes Wrong
+If the tool fails to submit or submits incorrectly:
+1. **Check ClassWallet immediately** - See what was actually submitted
+2. **Correct any errors manually** - Don't rely on the tool to fix itself
+3. **Report the issue** - Open a GitHub issue with details so it can be fixed
+4. **Contact ClassWallet support** - They are the authority on account issues
+
+---
+
 ## ✨ Features
 
 ### 🚀 Core Features
