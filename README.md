@@ -110,9 +110,20 @@ If the tool fails to submit or submits incorrectly:
 - Arizona ESA purse selection
 - Receipt and invoice documentation
 
+## 🚀 Quick Start
+
+**Want to get up and running in 5 minutes?**
+👉 **[See QUICKSTART.md](QUICKSTART.md)** for step-by-step instructions including:
+- Installation & setup
+- Creating your first submission
+- Setting up background automation (macOS/Windows/Linux)
+- Troubleshooting
+
+---
+
 ## Installation
 
-### Quick Start
+### Detailed Installation
 
 1. **Install Python 3.11+**
    - [Download Python](https://www.python.org/downloads/)
@@ -193,6 +204,20 @@ If the tool fails to submit or submits incorrectly:
 
 **Note**: Direct Pay requires vendors to be configured with their ClassWallet search term for automatic lookup.
 
+### Required Documents by Category
+
+Different expense categories require different documentation. Make sure you have the right files before submitting:
+
+| Category | Receipt | Invoice | Attestation | Curriculum |
+|----------|---------|---------|-------------|------------|
+| Computer Hardware | ✓ | | | |
+| Curriculum | ✓ | | | |
+| Tutoring (Facility) | ✓ | ✓ | | |
+| Tutoring (Individual) | ✓ | ✓ | ✓ | |
+| Supplemental Materials | ✓ | | | ✓ |
+
+**Missing documents will cause your submission to be rejected.** Make sure all required files are selected before submitting.
+
 ### Creating Reimbursement Templates
 
 1. Go to Settings → Manage Templates
@@ -271,6 +296,17 @@ ESA-Helper-AZ/
 }
 ```
 **Note**: Keep this file private! Never share it. It contains your ClassWallet credentials.
+
+## Keep the App Running in the Background
+
+It's recommended to keep ESA Helper running continuously so you can submit reimbursements anytime.
+
+**See [QUICKSTART.md - Keep the App Running Continuously](QUICKSTART.md#step-6-keep-the-app-running-continuously-recommended)** for detailed instructions for:
+- **macOS**: Using LaunchAgent (auto-start on login)
+- **Windows**: Using Task Scheduler (auto-start on login)
+- **Linux**: Using systemd (auto-start service)
+
+The guide also includes quick restart scripts for each platform if you need to restart the app manually.
 
 ## FAQ
 
