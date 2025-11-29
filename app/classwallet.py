@@ -794,11 +794,13 @@ class ClassWalletAutomation:
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", click_target)
                 time.sleep(0.5)
 
-                # Try clicking the element first
+                # Try clicking the element first (but use JavaScript click to avoid interception issues)
+                click_succeeded = False
                 try:
                     logger.info(f"Attempting to click category element...")
-                    click_target.click()
-                    logger.info(f"✓ Category '{category}' clicked")
+                    # Use JavaScript click instead of Selenium click to avoid element interception
+                    self.driver.execute_script("arguments[0].click();", click_target)
+                    logger.info(f"✓ Category '{category}' clicked (JavaScript)")
                     time.sleep(1)  # Wait for UI to update
 
                     # Check if it worked
@@ -808,40 +810,46 @@ class ClassWalletAutomation:
                         is_checked = False
 
                     if is_checked:
-                        logger.info(f"✓ Category '{category}' successfully selected via click")
+                        logger.info(f"✓ Category '{category}' successfully selected")
+                        click_succeeded = True
                     else:
-                        logger.warning(f"⚠️ Click didn't select category, trying input element...")
-                        # If click didn't work, try clicking the input directly
+                        logger.warning(f"⚠️ JavaScript click didn't select category, trying input element...")
+                except Exception as click_error:
+                    logger.warning(f"JavaScript click failed: {str(click_error)}")
+
+                # If JavaScript click didn't work, try clicking the input directly
+                if not click_succeeded:
+                    try:
+                        # Find input relative to our click target
+                        input_elem = click_target.find_element(By.TAG_NAME, "input") if not is_div else category_checkbox.find_element(By.TAG_NAME, "input")
+                        logger.info(f"Found input element, attempting JavaScript click...")
+                        self.driver.execute_script("arguments[0].click();", input_elem)
+                        logger.info(f"✓ Category '{category}' input clicked (JavaScript)")
+                        time.sleep(1)
+
+                        # Verify it worked
                         try:
-                            # Find input relative to our click target
-                            input_elem = click_target.find_element(By.TAG_NAME, "input") if not is_div else category_checkbox.find_element(By.TAG_NAME, "input")
-                            logger.info(f"Found input element, attempting click...")
-                            input_elem.click()
-                            logger.info(f"✓ Category '{category}' clicked (input)")
+                            is_checked = "Mui-checked" in check_element.get_attribute("class")
+                        except:
+                            is_checked = False
+
+                        if is_checked:
+                            logger.info(f"✓ Category '{category}' successfully selected")
+                            click_succeeded = True
+                        else:
+                            logger.warning(f"⚠️ Input click didn't work either, trying direct checkbox set...")
+                            # Last resort: use JavaScript to directly set checkbox
+                            self.driver.execute_script("arguments[0].checked = true;", input_elem)
+                            # Trigger change event
+                            self.driver.execute_script("""
+                                var event = new Event('change', { bubbles: true });
+                                arguments[0].dispatchEvent(event);
+                            """, input_elem)
+                            logger.info(f"✓ Category '{category}' set via JavaScript")
                             time.sleep(1)
-
-                            # Verify it worked
-                            try:
-                                is_checked = "Mui-checked" in check_element.get_attribute("class")
-                            except:
-                                is_checked = False
-
-                            if is_checked:
-                                logger.info(f"✓ Category '{category}' successfully selected via input click")
-                            else:
-                                logger.warning(f"⚠️ Input click didn't work either, trying JavaScript...")
-                                # Last resort: use JavaScript to directly set checkbox
-                                self.driver.execute_script("arguments[0].checked = true;", input_elem)
-                                # Trigger change event
-                                self.driver.execute_script("""
-                                    var event = new Event('change', { bubbles: true });
-                                    arguments[0].dispatchEvent(event);
-                                """, input_elem)
-                                logger.info(f"✓ Category '{category}' set via JavaScript")
-                                time.sleep(1)
-                        except Exception as input_error:
-                            logger.error(f"Failed to click input: {str(input_error)}")
-                            return False
+                    except Exception as input_error:
+                        logger.error(f"Failed to click input: {str(input_error)}")
+                        return False
                 except Exception as click_error:
                     logger.error(f"Error clicking category: {str(click_error)}")
                     return False
