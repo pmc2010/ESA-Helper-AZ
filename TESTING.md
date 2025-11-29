@@ -13,12 +13,22 @@ The test suite includes:
 
 ```
 tests/
-├── __init__.py                  # Python test package
-├── conftest.py                  # Pytest configuration and fixtures
-├── test_routes.py              # Flask route tests
-├── test_file_requirements.py   # File requirement validation tests
-└── app.test.js                 # JavaScript form validation tests
+├── __init__.py                      # Python test package
+├── conftest.py                      # Pytest configuration and fixtures
+├── test_templates.py               # Template CRUD operations (19 tests)
+├── test_direct_pay.py              # Direct Pay submission workflow (7 tests)
+├── test_file_requirements.py       # File requirement validation (16 tests)
+├── test_pdf_splitting.py           # PDF utilities and temp files (27 tests)
+├── test_submission_logging.py      # Submission logging and history (10 tests)
+├── test_routes.py                  # Flask routes and API endpoints (15 tests)
+└── app.test.js                     # JavaScript form validation tests
 ```
+
+## Test Statistics
+
+- **Total Python Tests**: 89 (all passing ✓)
+- **Code Coverage**: 21% overall
+- **Last Updated**: November 2024
 
 ## Quick Start
 
@@ -81,19 +91,39 @@ Pytest configuration file that provides:
 - CLI test runner fixture (`runner`)
 - Sample data fixtures (students, vendors, categories)
 
-#### `tests/test_routes.py`
-Tests for Flask routes and API endpoints:
-- Index page loading/redirects
-- Setup, manage students, manage vendors pages
-- Expense category configuration
-- API endpoint responses
+#### `tests/test_templates.py` (19 tests)
+Tests for template CRUD operations and workflows:
+- Saving new templates
+- Updating existing templates
+- Deleting templates
+- Retrieving templates by ID and student
+- File path validation
+- Direct Pay vs Reimbursement templates
+- Complete end-to-end template workflows
 
 Key test classes:
-- `TestMainRoutes`: Main page and route tests
-- `TestExpenseCategories`: Category configuration tests
-- `TestAPIEndpoints`: API endpoint tests
+- `TestTemplateSaving`: Template creation
+- `TestTemplateLoading`: Template retrieval
+- `TestTemplateDeletion`: Template deletion
+- `TestTemplateUtilityFunctions`: Utility function tests
+- `TestTemplateFileValidation`: File path validation
+- `TestTemplateIntegration`: Complete workflows
 
-#### `tests/test_file_requirements.py`
+#### `tests/test_direct_pay.py` (7 tests)
+Tests for Direct Pay submission workflow:
+- Basic Direct Pay submission flow
+- Vendor search term configuration
+- Login failure handling
+- Vendor selection failures
+- Submission logging
+- Auto-submit vs manual review modes
+- Additional info field population
+
+Key test classes:
+- `TestDirectPayWorkflow`: Core Direct Pay tests
+- `TestDirectPayAdditionalInfo`: Info field tests
+
+#### `tests/test_file_requirements.py` (16 tests)
 Tests for file requirement configurations:
 - Reimbursement file requirements for each category
 - Direct Pay file requirements for each category
@@ -106,23 +136,84 @@ Key test classes:
 - `TestFileRequirementsDifferences`: Comparison between types
 - `TestCategoryConsistency`: Configuration validation
 
+#### `tests/test_pdf_splitting.py` (27 tests)
+Tests for PDF operations and temporary file management:
+- PDF splitting (single and multi-page)
+- Temp file directory creation
+- Temp file retrieval and deletion
+- Path traversal protection
+- Cleanup of old and all temp files
+- API endpoints for PDF operations
+- Manage temp files page
+
+Key test classes:
+- `TestSplitPdfUtility`: PDF splitting utilities
+- `TestTempFileManagement`: Temp file operations
+- `TestPdfSplitApi`: API endpoints
+- `TestTempFilesApi`: Temp files endpoints
+- `TestManageTempFilesPage`: Web page tests
+
+#### `tests/test_submission_logging.py` (10 tests)
+Tests for submission logging and history:
+- Log entry creation with all fields
+- Category and comment field inclusion
+- Master history file updates
+- Optional field handling
+- History sorting (newest first)
+- Direct Pay vs Reimbursement logging
+- Missing field handling
+
+Key test classes:
+- `TestSubmissionLogging`: All logging tests
+
+#### `tests/test_routes.py` (15 tests)
+Tests for Flask routes and API endpoints:
+- Index page loading/redirects
+- Setup, manage students, manage vendors pages
+- Manage templates, manage logs, submission history pages
+- Expense category configuration
+- Template, vendor, PO number, credentials, and settings API endpoints
+
+Key test classes:
+- `TestMainRoutes`: Main page and route tests
+- `TestExpenseCategories`: Category configuration tests
+- `TestAPIEndpoints`: API endpoint tests
+
 ### Running Python Tests Examples
 
 ```bash
+# Run all tests
+uv run python -m pytest tests/ -v
+
+# Run all template tests
+uv run python -m pytest tests/test_templates.py -v
+
 # Run all file requirement tests
-pytest tests/test_file_requirements.py -v
+uv run python -m pytest tests/test_file_requirements.py -v
 
 # Run only Direct Pay requirement tests
-pytest tests/test_file_requirements.py::TestDirectPayFileRequirements -v
+uv run python -m pytest tests/test_file_requirements.py::TestDirectPayFileRequirements -v
+
+# Run direct pay submission tests
+uv run python -m pytest tests/test_direct_pay.py -v
+
+# Run PDF operations tests
+uv run python -m pytest tests/test_pdf_splitting.py -v
+
+# Run submission logging tests
+uv run python -m pytest tests/test_submission_logging.py -v
+
+# Run routes and API tests
+uv run python -m pytest tests/test_routes.py -v
 
 # Run with coverage
-pytest tests/ --cov=app --cov-report=html
+uv run python -m pytest tests/ --cov=app --cov-report=html
 
 # Run and stop on first failure
-pytest -x
+uv run python -m pytest tests/ -x
 
 # Run with print statements visible
-pytest -s
+uv run python -m pytest tests/ -s
 ```
 
 ## JavaScript Testing

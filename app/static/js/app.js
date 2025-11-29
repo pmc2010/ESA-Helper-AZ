@@ -1083,23 +1083,35 @@ async function confirmSubmit() {
         const result = await response.json();
 
         if (response.ok) {
+            console.log('Submission successful, response:', result);
+
             // Hide confirmation modal
-            bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
+            const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('confirmationModal'));
+            if (confirmationModal) {
+                confirmationModal.hide();
+            }
 
             // Show success modal
             document.getElementById('successPoNumber').textContent = result.po_number || poNumber;
             new bootstrap.Modal(document.getElementById('successModal')).show();
 
-            // Refresh recent submissions (submission is logged during automation)
+            // Re-enable button since submission is complete
+            confirmSubmitBtn.disabled = false;
+            confirmSubmitBtn.textContent = originalBtnText;
+
+            // Refresh recent submissions (wait longer since ClassWallet automation may be running)
             if (typeof window.loadRecentSubmissions === 'function') {
-                console.log('Refreshing recent submissions after successful submission...');
-                // Wait a moment for the submission to be fully logged, then refresh
+                console.log('Scheduling submission history refresh...');
+                // Wait longer (3 seconds) for ClassWallet automation to complete and log results
                 setTimeout(() => {
+                    console.log('Calling loadRecentSubmissions()...');
                     window.loadRecentSubmissions();
-                }, 1000);
+                }, 3000);
+            } else {
+                console.warn('loadRecentSubmissions function not available');
             }
 
-            // TODO: Trigger ClassWallet automation in the background
+            // Trigger ClassWallet automation in the background
             triggerClassWalletAutomation(submitData);
         } else {
             // Hide confirmation modal before showing error modal
@@ -1228,13 +1240,22 @@ let currentFileBrowserState = {
 
 // Get student-specific base path
 function getStudentBasePath() {
-    // Note: This is a fallback function.
-    // Actual paths should be configured in student profiles via "Manage Students"
+    // Get the student's configured folder path from their profile
     const studentId = document.getElementById('student').value;
-    const year = new Date().getFullYear();
 
-    // Generic base path - users should configure their own paths
-    return `/path/to/esa/${studentId.toLowerCase()}/${year}`;
+    if (!studentId || !studentsData) {
+        return '';
+    }
+
+    const student = studentsData.find(s => s.id === studentId);
+    if (student && student.folder) {
+        // Use the student's configured folder path
+        return student.folder;
+    }
+
+    // Fallback: placeholder path (should not reach here if student is properly configured)
+    console.warn(`No folder path configured for student: ${studentId}`);
+    return `/path/to/esa/${studentId.toLowerCase()}`;
 }
 
 /**

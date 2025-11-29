@@ -112,3 +112,39 @@ class TestAPIEndpoints:
         with patch('app.routes.load_templates', return_value=[]):
             response = client.get('/api/template/nonexistent')
             assert response.status_code == 404
+
+    def test_get_vendors(self, client):
+        """Test GET /api/vendors endpoint"""
+        mock_vendors = [
+            {'id': 'vendor1', 'name': 'Test Vendor'}
+        ]
+        with patch('app.routes.load_vendors', return_value=mock_vendors):
+            response = client.get('/api/vendors')
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert len(data) == 1
+
+    def test_get_po_number(self, client):
+        """Test GET /api/po-number endpoint"""
+        with patch('app.routes.generate_po_number', return_value='PO-2024-001'):
+            response = client.get('/api/po-number')
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert 'po_number' in data or 'number' in data
+
+    def test_get_credentials_status(self, client):
+        """Test GET /api/config/credentials endpoint"""
+        mock_config = {'email': 'test@example.com'}
+        with patch('app.routes.load_config', return_value=mock_config):
+            response = client.get('/api/config/credentials')
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert isinstance(data, dict)
+
+    def test_get_auto_submit_setting(self, client):
+        """Test GET /api/settings/auto-submit endpoint"""
+        with patch('app.routes.load_config', return_value={'auto_submit': True}):
+            response = client.get('/api/settings/auto-submit')
+            assert response.status_code == 200
+            data = json.loads(response.data)
+            assert isinstance(data, dict)

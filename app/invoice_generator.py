@@ -9,19 +9,105 @@ import json
 import subprocess
 import zipfile
 import shutil
+import re
 from pathlib import Path
 from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+from werkzeug.utils import secure_filename
 
 logger = logging.getLogger(__name__)
 
 # Path to template - relative to this file's location
 TEMPLATE_PATH = Path(__file__).parent / "templates" / "invoice_template.xltx"
+# Define safe base directory for invoice output
+BASE_OUTPUT_DIR = Path(__file__).parent.parent / "data" / "invoices"
+
+
+def sanitize_filename(name: str, extension: str = None) -> str:
+    """
+    Sanitize input for use in a filename.
+    Only allows alphanumerics, underscores, and hyphens (strict).
+    Prevents path traversal, dotfile attacks, and command-line option injection.
+
+    Args:
+        name: Input filename to sanitize
+        extension: Optional file extension to enforce (e.g., "xlsx", "pdf")
+
+    Returns:
+        Safe filename or raises ValueError if input is invalid
+
+    Raises:
+        ValueError: If filename cannot be safely sanitized
+    """
+    if not name:
+        return "file"
+
+    sanitized = str(name).strip()
+
+    # Strict whitelist: only alphanumerics, underscores, hyphens
+    # This rejects all special characters, spaces, dots, etc.
+    if not re.fullmatch(r'[a-zA-Z0-9_\-]+', sanitized):
+        # Fall back to replacing unsafe characters with underscore
+        sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', sanitized)
+
+    # Remove leading dots, dashes, slashes - prevent dotfiles and option confusion
+    sanitized = sanitized.lstrip('._-/')
+
+    # Reject if still starts with problematic characters
+    while sanitized and sanitized[0] in '.-/':
+        sanitized = sanitized[1:]
+
+    # Ensure not empty
+    if not sanitized:
+        sanitized = "file"
+
+    # Collapse consecutive hyphens
+    sanitized = re.sub(r'-+', '-', sanitized)
+
+    # Optionally enforce a file extension
+    if extension:
+        # Remove any existing extension first
+        sanitized = re.sub(r'\.[a-zA-Z0-9]+$', '', sanitized)
+        # Add the enforced extension
+        ext_clean = extension.lstrip('.')
+        if not re.fullmatch(r'[a-zA-Z0-9]+', ext_clean):
+            raise ValueError(f"Invalid extension: {extension}")
+        sanitized = f"{sanitized}.{ext_clean}"
+
+    return sanitized
 
 
 class InvoiceGenerator:
     """Generate invoices from template with vendor and student data"""
+
+    def _is_path_safe(self, target_path: Path, base_dir: Path) -> bool:
+        """
+        Check that no part of the target_path under base_dir is a symlink.
+        Prevents symlink-based directory traversal attacks.
+
+        Args:
+            target_path: Path to check for symlinks
+            base_dir: Base directory that target_path must be within
+
+        Returns:
+            True if safe (no symlinks in path chain), False otherwise
+        """
+        try:
+            target_path_resolved = target_path.resolve()
+            base_dir_resolved = base_dir.resolve()
+        except Exception:
+            return False
+
+        # Walk up from target_path's parent to base_dir, checking for symlinks
+        current = target_path_resolved
+        while current != base_dir_resolved and current != current.parent:
+            # Check if the current directory component is a symlink
+            if current.is_symlink():
+                return False
+            current = current.parent
+
+        return True
 
     def __init__(self):
         """Initialize invoice generator"""
@@ -127,7 +213,7 @@ class InvoiceGenerator:
                 ws[f'B{row}'] = item.get('description', '')
                 ws[f'D{row}'] = item.get('quantity', 1)
                 ws[f'E{row}'] = item.get('unit_price', 0)
-                # F{row} already has formula for line total
+                # F{row} already has formula for line total - don't overwrite it
                 logger.info(f"✓ Line {idx + 1}: {item.get('description', 'N/A')} - Qty: {ws[f'D{row}'].value}, Price: ${ws[f'E{row}'].value}")
 
             if line_items:
@@ -142,10 +228,15 @@ class InvoiceGenerator:
             # Save Excel file
             logger.info("7. Saving Excel file...")
             # Create filename with timestamp and vendor name
-            invoice_number = invoice_data.get('invoice_number', 'invoice')
-            vendor_name = vendor_data.get('name', 'vendor').lower().replace(' ', '_')
-            excel_filename = f"{invoice_number}_{vendor_name}_inv.xlsx"
+            # Use strict sanitization with enforced .xlsx extension
+            invoice_number = sanitize_filename(str(invoice_data.get('invoice_number', 'invoice')))
+            vendor_name = sanitize_filename(str(vendor_data.get('name', 'vendor')).lower())
+            # Sanitize the combined filename and enforce extension
+            excel_filename = sanitize_filename(f"{invoice_number}_{vendor_name}_inv", extension="xlsx")
             excel_path = output_path / excel_filename
+
+            # Validate that excel_path stays within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(excel_path, BASE_OUTPUT_DIR)
 
             # Save Excel file - preserve template structure to avoid corruption
             try:
@@ -165,10 +256,18 @@ class InvoiceGenerator:
             else:
                 logger.info(f"✓ File created: {file_size} bytes")
 
+            # Recalculate formulas in Excel file using LibreOffice
+            logger.info("7b. Recalculating formulas...")
+            self._recalculate_excel_formulas(excel_path)
+
             # Convert to PDF
             logger.info("8. Converting to PDF...")
-            pdf_filename = f"{invoice_number}_{vendor_name}_inv.pdf"
+            # Sanitize with enforced .pdf extension
+            pdf_filename = sanitize_filename(f"{invoice_number}_{vendor_name}_inv", extension="pdf")
             pdf_path = output_path / pdf_filename
+
+            # Validate that pdf_path stays within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(pdf_path, BASE_OUTPUT_DIR)
 
             if self._convert_to_pdf(excel_path, pdf_path):
                 logger.info(f"✓ Saved: {pdf_path}")
@@ -356,6 +455,176 @@ class InvoiceGenerator:
             logger.error(f"   Failed to fix content type: {str(e)}")
             raise
 
+    def _recalculate_excel_formulas(self, excel_path: Path):
+        """
+        Recalculate Excel formulas using LibreOffice in-place
+
+        Excel files created by openpyxl contain formulas but Excel doesn't calculate
+        them until the file is opened and saved. This method uses LibreOffice to
+        open the file, recalculate, and save it back.
+
+        Args:
+            excel_path: Path to Excel file to recalculate
+        """
+        try:
+            # Check if LibreOffice is available
+            result = subprocess.run(['which', 'libreoffice'],
+                                  capture_output=True, text=True)
+            if result.returncode != 0:
+                logger.warning("   LibreOffice not found - formulas will not be calculated")
+                logger.warning("   Install with: brew install libreoffice")
+                return
+
+            logger.info(f"   Opening Excel file with LibreOffice for formula recalculation...")
+
+            # Create a Python script that LibreOffice will execute to recalculate
+            # This uses LibreOffice's UNO bridge to properly calculate formulas
+            # Use sanitized filenames for temp files
+            safe_excel_name = sanitize_filename(excel_path.stem)
+            temp_script = excel_path.parent / f".tmp_{safe_excel_name}_recalc.py"
+            temp_output = excel_path.parent / f".tmp_{safe_excel_name}"
+
+            # Validate temp script and output paths are within BASE_OUTPUT_DIR (prevent path traversal)
+            self._validate_output_path(temp_script, BASE_OUTPUT_DIR)
+            self._validate_output_path(temp_output, BASE_OUTPUT_DIR)
+
+            script_content = f'''
+import uno
+from com.sun.star.beans import PropertyValue
+
+def recalc():
+    try:
+        # Open document
+        local_context = uno.getComponentContext()
+        resolver = local_context.ServiceManager.createInstanceWithContext(
+            "com.sun.star.bridge.UnoUrlResolver", local_context)
+        try:
+            ctx = resolver.resolve(
+                "uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+            smgr = ctx.ServiceManager
+        except:
+            # Start fresh LibreOffice instance
+            import subprocess
+            subprocess.Popen(['libreoffice', '--headless', '--accept=socket,host=localhost,port=2002;urp;'])
+            import time
+            time.sleep(3)
+            ctx = resolver.resolve(
+                "uno:socket,host=localhost,port=2002;urp;StarOffice.ComponentContext")
+            smgr = ctx.ServiceManager
+
+        desktop = smgr.createInstanceWithContext("com.sun.star.frame.Desktop", ctx)
+        doc = desktop.loadComponentFromURL("file://{excel_path}", "_blank", 0, ())
+
+        # Recalculate
+        doc.calculateAll()
+
+        # Save
+        doc.store()
+        doc.close(True)
+
+    except Exception as e:
+        print(f"Error: {{e}}")
+
+g_exportedScripts = (recalc,)
+'''
+
+            try:
+                # Write script - validate path safety one more time before write
+                # Use canonical path check with .relative_to() only (no fragile string prefix checks)
+                script_path_real = temp_script.resolve()
+                base_dir_real = BASE_OUTPUT_DIR.resolve()
+                try:
+                    script_path_real.relative_to(base_dir_real)
+                except ValueError:
+                    raise ValueError(f"Attempted to write temp script outside of safe directory: {script_path_real}")
+
+                # Only use the validated canonical path for file operations
+                with open(script_path_real, 'w') as f:
+                    f.write(script_content)
+
+                # Validate excel_path before passing to subprocess
+                # Check: exists, not a symlink, within BASE_OUTPUT_DIR, safe filename, allowlist
+                excel_path_real = excel_path.resolve()
+                base_dir_real = BASE_OUTPUT_DIR.resolve()
+
+                # Ensure it's within safe directory
+                try:
+                    excel_path_real.relative_to(base_dir_real)
+                except ValueError:
+                    raise ValueError(f"Excel path is not within safe output directory: {excel_path_real}")
+
+                # Reject symlinks to prevent symlink attacks - check file and all parent directories
+                if excel_path_real.is_symlink():
+                    raise ValueError(f"Excel file is a symlink, refusing to process: {excel_path_real}")
+
+                # Check that NO parent directory (up to base_dir_real) is a symlink
+                if not self._is_path_safe(excel_path_real, base_dir_real):
+                    raise ValueError(f"Excel file path or parent directories contain unsafe symlink: {excel_path_real}")
+
+                # Check file exists
+                if not excel_path_real.exists():
+                    raise ValueError(f"Excel file does not exist: {excel_path_real}")
+
+                # Validate filename matches safe pattern (alphanumerics, underscore, hyphen, dot, .xlsx extension)
+                safe_filename_pattern = re.compile(r'^[a-zA-Z0-9_\-]+\.xlsx$')
+                if not safe_filename_pattern.match(excel_path_real.name):
+                    raise ValueError(f"Unsafe excel filename: {excel_path_real.name}")
+
+                # ALLOWLIST: Only allow exactly the file we created (defense in depth)
+                # This ensures the file passed to subprocess is the one we just created
+                if excel_path_real != excel_path.resolve():
+                    raise ValueError("Attempted recalculation on a path not just created by this process")
+
+                # Validate temp_script filename pattern before subprocess
+                # Ensure temp script is only the file we created with expected naming
+                temp_script_pattern = re.compile(r'^\.tmp_[a-zA-Z0-9_\-]+_recalc\.py$')
+                if not temp_script_pattern.match(script_path_real.name):
+                    raise ValueError(f"Unsafe temp script filename: {script_path_real.name}")
+
+                # Try UNO approach first
+                cmd = [
+                    'libreoffice',
+                    '--headless',
+                    f'--script-provider=python:{str(script_path_real)}',
+                    str(excel_path_real)
+                ]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                if result.returncode != 0:
+                    # Fallback: Simple open and save approach
+                    logger.info("   Using fallback recalculation method...")
+                    cmd = [
+                        'libreoffice',
+                        '--headless',
+                        '--calc',
+                        '--invisible',
+                        str(excel_path_real)
+                    ]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+
+                logger.info("   ✓ Formulas recalculated")
+
+            finally:
+                # Clean up script - validate before deleting using resolved path
+                try:
+                    # Validate using normalized (resolved) path before deleting
+                    temp_script_real = temp_script.resolve()
+                    self._validate_output_path(temp_script_real, BASE_OUTPUT_DIR.resolve())
+                    temp_script_real.unlink()
+                except ValueError as ve:
+                    logger.error(f"Security validation failed before temp script cleanup: {ve}")
+                except:
+                    pass
+
+        except subprocess.TimeoutExpired:
+            logger.warning("   LibreOffice recalculation timed out")
+        except FileNotFoundError:
+            logger.warning("   LibreOffice not found - formulas will not be calculated")
+            logger.warning("   Install with: brew install libreoffice")
+        except Exception as e:
+            logger.warning(f"   Failed to recalculate formulas: {str(e)}")
+            # Don't raise - Excel file is still usable, just without calculated values
+
     def _convert_to_pdf(self, excel_path: Path, pdf_path: Path) -> bool:
         """
         Convert Excel file to PDF using LibreOffice
@@ -436,6 +705,37 @@ class InvoiceGenerator:
         except Exception as e:
             logger.error(f"   PDF conversion error: {str(e)}")
             return False
+
+    def _validate_output_path(self, path: Path, base_dir: Path) -> None:
+        """
+        Validate that path is strictly contained within base_dir.
+        Prevents path traversal attacks.
+
+        Args:
+            path: The path to validate
+            base_dir: The base directory that path must be within
+
+        Raises:
+            ValueError: If path escapes base_dir
+        """
+        try:
+            base_dir_resolved = base_dir.resolve()
+            path_resolved = path.resolve()
+
+            # Use is_relative_to (Python 3.9+) for robust containment check
+            # This prevents false positives from startswith() checks
+            try:
+                path_resolved.relative_to(base_dir_resolved)
+                logger.debug(f"Path validation passed: {path_resolved}")
+            except ValueError:
+                logger.error(f"Path validation failed: {path_resolved} is not within {base_dir_resolved}")
+                raise ValueError(f"Unsafe path: {path} must be within {base_dir}")
+
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Path validation error: {str(e)}")
+            raise ValueError(f"Failed to validate path {path}: {str(e)}")
 
 
 def load_vendor_profiles() -> list:

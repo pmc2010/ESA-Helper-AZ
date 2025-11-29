@@ -113,7 +113,7 @@
                 </div>
 
                 <!-- Add/Edit Template Form -->
-                <div id="formSection" class="card border-success mb-4">
+                <div id="formSection" class="card border-success mb-4" style="display: none;">
                     <div class="card-header bg-light">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0" id="formTitle">Add New Template</h5>
@@ -505,6 +505,7 @@
             }
 
             // Collect template data
+            const templateId = document.getElementById('templateId').value;
             const templateData = {
                 name: name,
                 vendor_id: vendorId,
@@ -515,6 +516,11 @@
                 comment: document.getElementById('comment').value,
                 files: files
             };
+
+            // Include template ID if editing (backend will detect update vs create by checking if ID exists)
+            if (templateId && templateId.trim() !== '') {
+                templateData.id = templateId;
+            }
 
             // Send to API
             fetch('/api/templates', {

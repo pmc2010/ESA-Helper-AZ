@@ -304,8 +304,6 @@ If the app crashes or stops, anyone can quickly restart it by clicking a bookmar
 
    **Note:** If you configured a custom port in `.env`, replace `5000` with your port number in the `start http://localhost:5000` line.
 
-   **Note:** If you configured a custom port in `.env`, replace `5000` with your port number in the `start http://localhost:5000` line.
-
 2. **Double-click the batch file to restart** – it will kill Python, restart the app, and open it in your browser
 
 ### Browser Bookmark (All Platforms)

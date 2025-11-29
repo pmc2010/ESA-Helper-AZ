@@ -272,19 +272,60 @@ class ClassWalletAutomation:
             # Step 0: Check if student is already selected (appears in top-right corner)
             logger.info("\n0. Checking if student is already selected...")
             try:
-                # Look for the student name in the header/top-right area
-                student_header = self.driver.find_element(
+                # Look for the student name in the header area (top-right)
+                # Check for visible instances (not hidden in dropdown menus)
+                student_elements = self.driver.find_elements(
                     By.XPATH, f"//span[contains(text(), '{full_name}')]"
                 )
 
-                # Check if this is in the header (not in a dropdown)
-                parent = student_header.find_element(By.XPATH, "ancestor::header | ancestor::nav | ancestor::div[@role='banner']")
-                if parent:
-                    logger.info(f"✓ Student {full_name} is already selected!")
-                    logger.info(f"Student selection complete (no action needed)")
-                    return True
-            except:
+                logger.info(f"Found {len(student_elements)} element(s) containing '{full_name}'")
+
+                # If we found the student name, check if it's visible (not hidden in a dropdown)
+                for i, elem in enumerate(student_elements):
+                    is_displayed = elem.is_displayed()
+                    logger.info(f"  Element {i+1}: displayed={is_displayed}")
+
+                    if is_displayed:
+                        # Check if this element is NOT inside a hidden dropdown/menu
+                        try:
+                            # Check if any parent element is actually hidden
+                            parents = elem.find_elements(By.XPATH, "ancestor::*")
+                            is_hidden = False
+
+                            for parent in parents[:5]:  # Check first 5 parent levels
+                                parent_classes = parent.get_attribute("class") or ""
+                                parent_style = parent.get_attribute("style") or ""
+
+                                # Check for explicit hidden indicators
+                                if any(x in parent_classes.lower() for x in ['d-none', 'hidden', 'invisible']):
+                                    is_hidden = True
+                                    logger.info(f"    Element {i+1}: Found hidden class in parent")
+                                    break
+                                if 'display: none' in parent_style.lower():
+                                    is_hidden = True
+                                    logger.info(f"    Element {i+1}: Found display:none in parent style")
+                                    break
+
+                            if is_hidden:
+                                logger.info(f"    Element {i+1} is in a hidden menu, skipping")
+                                continue
+
+                            # If we get here, the element is visible and not hidden
+                            logger.info(f"✓ Student {full_name} is already selected!")
+                            logger.info(f"Student selection complete (no action needed)")
+                            return True
+
+                        except Exception as parent_check_error:
+                            # If we can't determine parent structure, assume it's the visible one
+                            logger.info(f"    Parent check inconclusive, assuming this is the visible instance")
+                            logger.info(f"✓ Student {full_name} is already selected!")
+                            logger.info(f"Student selection complete (no action needed)")
+                            return True
+
+                logger.info("Student not currently selected, will open dropdown...")
+            except Exception as e:
                 # Student not already selected, proceed with dropdown selection
+                logger.info(f"Exception during student check: {str(e)}")
                 logger.info("Student not currently selected, will open dropdown...")
                 pass
 
@@ -647,15 +688,30 @@ class ClassWalletAutomation:
             logger.info(f"2. Selecting expense category: {category}...")
 
             # Note: Category names from the form may differ from ClassWallet's exact format:
+            # Form sends: "Computer Hardware & Technological Devices"
+            # ClassWallet has: "Computer hardware and technological devices"
             # Form sends: "Tutoring & Teaching Services - Accredited Individual"
             # ClassWallet has: "Tutoring and teaching Services – Accredited Individual"
             # (different: & vs "and", capitalization, en-dash vs hyphen)
 
             # Normalize the category name to match ClassWallet's format
-            category_normalized = category.replace(" & ", " and ").replace("&", "and")
-            category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
-            # ClassWallet uses lowercase "teaching" after "and" in category names
-            category_normalized = category_normalized.replace("and Teaching", "and teaching")
+            # ClassWallet uses specific capitalization patterns:
+            # "Computer Hardware & Technological Devices" → "Computer hardware and technological devices"
+            # "Tutoring & Teaching Services" → "Tutoring and teaching Services" (Services capitalized)
+
+            # First, do the specific replacements for known patterns
+            if category.startswith("Computer Hardware"):
+                # Computer Hardware category: all words after "Computer" are lowercase
+                category_normalized = "Computer hardware and technological devices"
+            elif "Tutoring" in category and "Teaching" in category:
+                # Tutoring categories: replace & with "and", but keep Services capitalized
+                category_normalized = category.replace(" & ", " and ").replace("&", "and")
+                category_normalized = category_normalized.replace("and Teaching", "and teaching")
+                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
+            else:
+                # Generic normalization for other categories
+                category_normalized = category.replace(" & ", " and ").replace("&", "and")
+                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
 
             logger.debug(f"Original category: {category}")
             logger.debug(f"Normalized category: {category_normalized}")
@@ -750,11 +806,13 @@ class ClassWalletAutomation:
                 self.driver.execute_script("arguments[0].scrollIntoView(true);", click_target)
                 time.sleep(0.5)
 
-                # Try clicking the element first
+                # Try clicking the element first (but use JavaScript click to avoid interception issues)
+                click_succeeded = False
                 try:
                     logger.info(f"Attempting to click category element...")
-                    click_target.click()
-                    logger.info(f"✓ Category '{category}' clicked")
+                    # Use JavaScript click instead of Selenium click to avoid element interception
+                    self.driver.execute_script("arguments[0].click();", click_target)
+                    logger.info(f"✓ Category '{category}' clicked (JavaScript)")
                     time.sleep(1)  # Wait for UI to update
 
                     # Check if it worked
@@ -764,43 +822,46 @@ class ClassWalletAutomation:
                         is_checked = False
 
                     if is_checked:
-                        logger.info(f"✓ Category '{category}' successfully selected via click")
+                        logger.info(f"✓ Category '{category}' successfully selected")
+                        click_succeeded = True
                     else:
-                        logger.warning(f"⚠️ Click didn't select category, trying input element...")
-                        # If click didn't work, try clicking the input directly
-                        try:
-                            # Find input relative to our click target
-                            input_elem = click_target.find_element(By.TAG_NAME, "input") if not is_div else category_checkbox.find_element(By.TAG_NAME, "input")
-                            logger.info(f"Found input element, attempting click...")
-                            input_elem.click()
-                            logger.info(f"✓ Category '{category}' clicked (input)")
-                            time.sleep(1)
-
-                            # Verify it worked
-                            try:
-                                is_checked = "Mui-checked" in check_element.get_attribute("class")
-                            except:
-                                is_checked = False
-
-                            if is_checked:
-                                logger.info(f"✓ Category '{category}' successfully selected via input click")
-                            else:
-                                logger.warning(f"⚠️ Input click didn't work either, trying JavaScript...")
-                                # Last resort: use JavaScript to directly set checkbox
-                                self.driver.execute_script("arguments[0].checked = true;", input_elem)
-                                # Trigger change event
-                                self.driver.execute_script("""
-                                    var event = new Event('change', { bubbles: true });
-                                    arguments[0].dispatchEvent(event);
-                                """, input_elem)
-                                logger.info(f"✓ Category '{category}' set via JavaScript")
-                                time.sleep(1)
-                        except Exception as input_error:
-                            logger.error(f"Failed to click input: {str(input_error)}")
-                            return False
+                        logger.warning(f"⚠️ JavaScript click didn't select category, trying input element...")
                 except Exception as click_error:
-                    logger.error(f"Error clicking category: {str(click_error)}")
-                    return False
+                    logger.warning(f"JavaScript click failed: {str(click_error)}")
+
+                # If JavaScript click didn't work, try clicking the input directly
+                if not click_succeeded:
+                    try:
+                        # Find input relative to our click target
+                        input_elem = click_target.find_element(By.TAG_NAME, "input") if not is_div else category_checkbox.find_element(By.TAG_NAME, "input")
+                        logger.info(f"Found input element, attempting JavaScript click...")
+                        self.driver.execute_script("arguments[0].click();", input_elem)
+                        logger.info(f"✓ Category '{category}' input clicked (JavaScript)")
+                        time.sleep(1)
+
+                        # Verify it worked
+                        try:
+                            is_checked = "Mui-checked" in check_element.get_attribute("class")
+                        except:
+                            is_checked = False
+
+                        if is_checked:
+                            logger.info(f"✓ Category '{category}' successfully selected")
+                            click_succeeded = True
+                        else:
+                            logger.warning(f"⚠️ Input click didn't work either, trying direct checkbox set...")
+                            # Last resort: use JavaScript to directly set checkbox
+                            self.driver.execute_script("arguments[0].checked = true;", input_elem)
+                            # Trigger change event
+                            self.driver.execute_script("""
+                                var event = new Event('change', { bubbles: true });
+                                arguments[0].dispatchEvent(event);
+                            """, input_elem)
+                            logger.info(f"✓ Category '{category}' set via JavaScript")
+                            time.sleep(1)
+                    except Exception as input_error:
+                        logger.error(f"Failed to click input: {str(input_error)}")
+                        return False
             else:
                 logger.info(f"✓ Category '{category}' already selected")
 

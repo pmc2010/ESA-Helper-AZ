@@ -38,9 +38,105 @@ def cleanup_test_submissions():
     # This runs before any tests
     yield
     # This runs after all tests are complete
-    print("\n\n🧹 Cleaning up test submissions (created_by='test')...")
+    import os
+    from pathlib import Path
+
+    print("\n\n🧹 Cleaning up test submissions...")
+
+    # Delete test submission JSON files
+    logs_dir = Path('logs')
+    if logs_dir.exists():
+        test_files_deleted = 0
+        for f in logs_dir.glob('submission_*.json'):
+            if f.name == 'submission_history.json':
+                continue
+            try:
+                with open(f) as file:
+                    content = file.read()
+                    # Delete files containing test data or sample students
+                    if ('"Test' in content or 'Test Category' in content or
+                        'Student A' in content or 'Student B' in content or
+                        'Student C' in content):
+                        f.unlink()
+                        test_files_deleted += 1
+            except:
+                pass
+
+        if test_files_deleted > 0:
+            print(f"   Deleted {test_files_deleted} test submission files")
+
+    # Delete submissions marked with created_by='test' from history
     result = delete_all_submissions(created_by_filter='test')
-    print(f"   {result['message']}\n")
+    if 'Deleted 0' not in result['message']:
+        print(f"   {result['message']}")
+
+    # Also clean up history file from sample submissions
+    try:
+        history_file = logs_dir / 'submission_history.json'
+        if history_file.exists():
+            import json
+            with open(history_file) as f:
+                data = json.load(f)
+
+            submissions = data.get('submissions', [])
+            original_count = len(submissions)
+
+            # Remove sample student submissions
+            cleaned = [
+                s for s in submissions
+                if s.get('student', '') not in ['Student A', 'Student B', 'Student C']
+            ]
+
+            if len(cleaned) < original_count:
+                data['submissions'] = cleaned
+                with open(history_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+                print(f"   Removed {original_count - len(cleaned)} sample submissions from history")
+    except:
+        pass
+
+    # Clean up test data from students, vendors, and templates
+    data_dir = Path('data')
+    if data_dir.exists():
+        import json
+
+        # Clean students.json
+        students_file = data_dir / 'students.json'
+        if students_file.exists():
+            try:
+                with open(students_file) as f:
+                    data = json.load(f)
+
+                students = data.get('students', [])
+                original_count = len(students)
+
+                # Remove test students (new_student, Student A/B/C, etc.)
+                cleaned = [
+                    s for s in students
+                    if s.get('id', '') not in ['new_student', 'student_a', 'student_b', 'student_c']
+                    and s.get('name', '') not in ['Student A', 'Student B', 'Student C', 'New Student']
+                ]
+
+                if len(cleaned) < original_count:
+                    data['students'] = cleaned
+                    with open(students_file, 'w') as f:
+                        json.dump(data, f, indent=2)
+                    print(f"   Removed {original_count - len(cleaned)} test students from data/students.json")
+            except:
+                pass
+
+        # Clean templates for test students
+        templates_dir = data_dir / 'esa_templates'
+        if templates_dir.exists():
+            for template_file in templates_dir.glob('*.json'):
+                if template_file.name in ['student_a.json', 'student_b.json', 'student_c.json', 'new_student.json']:
+                    try:
+                        template_file.unlink()
+                        print(f"   Deleted test template: {template_file.name}")
+                    except:
+                        pass
+
+    print()
 
 
 @pytest.fixture
