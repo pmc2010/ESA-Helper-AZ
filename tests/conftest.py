@@ -95,6 +95,47 @@ def cleanup_test_submissions():
     except:
         pass
 
+    # Clean up test data from students, vendors, and templates
+    data_dir = Path('data')
+    if data_dir.exists():
+        import json
+
+        # Clean students.json
+        students_file = data_dir / 'students.json'
+        if students_file.exists():
+            try:
+                with open(students_file) as f:
+                    data = json.load(f)
+
+                students = data.get('students', [])
+                original_count = len(students)
+
+                # Remove test students (new_student, Student A/B/C, etc.)
+                cleaned = [
+                    s for s in students
+                    if s.get('id', '') not in ['new_student', 'student_a', 'student_b', 'student_c']
+                    and s.get('name', '') not in ['Student A', 'Student B', 'Student C', 'New Student']
+                ]
+
+                if len(cleaned) < original_count:
+                    data['students'] = cleaned
+                    with open(students_file, 'w') as f:
+                        json.dump(data, f, indent=2)
+                    print(f"   Removed {original_count - len(cleaned)} test students from data/students.json")
+            except:
+                pass
+
+        # Clean templates for test students
+        templates_dir = data_dir / 'esa_templates'
+        if templates_dir.exists():
+            for template_file in templates_dir.glob('*.json'):
+                if template_file.name in ['student_a.json', 'student_b.json', 'student_c.json', 'new_student.json']:
+                    try:
+                        template_file.unlink()
+                        print(f"   Deleted test template: {template_file.name}")
+                    except:
+                        pass
+
     print()
 
 
