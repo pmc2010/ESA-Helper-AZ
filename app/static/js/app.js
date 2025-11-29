@@ -1083,23 +1083,35 @@ async function confirmSubmit() {
         const result = await response.json();
 
         if (response.ok) {
+            console.log('Submission successful, response:', result);
+
             // Hide confirmation modal
-            bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
+            const confirmationModal = bootstrap.Modal.getInstance(document.getElementById('confirmationModal'));
+            if (confirmationModal) {
+                confirmationModal.hide();
+            }
 
             // Show success modal
             document.getElementById('successPoNumber').textContent = result.po_number || poNumber;
             new bootstrap.Modal(document.getElementById('successModal')).show();
 
-            // Refresh recent submissions (submission is logged during automation)
+            // Re-enable button since submission is complete
+            confirmSubmitBtn.disabled = false;
+            confirmSubmitBtn.textContent = originalBtnText;
+
+            // Refresh recent submissions (wait longer since ClassWallet automation may be running)
             if (typeof window.loadRecentSubmissions === 'function') {
-                console.log('Refreshing recent submissions after successful submission...');
-                // Wait a moment for the submission to be fully logged, then refresh
+                console.log('Scheduling submission history refresh...');
+                // Wait longer (3 seconds) for ClassWallet automation to complete and log results
                 setTimeout(() => {
+                    console.log('Calling loadRecentSubmissions()...');
                     window.loadRecentSubmissions();
-                }, 1000);
+                }, 3000);
+            } else {
+                console.warn('loadRecentSubmissions function not available');
             }
 
-            // TODO: Trigger ClassWallet automation in the background
+            // Trigger ClassWallet automation in the background
             triggerClassWalletAutomation(submitData);
         } else {
             // Hide confirmation modal before showing error modal
