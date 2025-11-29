@@ -1,8 +1,63 @@
-# ESA Helper - ClassWallet Automation Tool
+# ESA Helper - Arizona Empowerment Scholarship Account (ESA) ClassWallet Automation
 
-**Reduce your ClassWallet reimbursement submissions from 20 minutes to 5 minutes with intelligent automation.**
+**Automate your Arizona ESA reimbursements and direct vendor payments in ClassWallet. Reduce submission time from 20-40 minutes to 5-25 minutes.**
 
-ESA Helper is a comprehensive web application that automates ESA (Education Savings Account) ClassWallet reimbursement submissions and provides tools for managing student data, creating reusable templates, and generating curriculum documents with ChatGPT integration.
+ESA Helper is a comprehensive desktop application that automates Empowerment Scholarship Account (ESA) reimbursement submissions and direct vendor payments through ClassWallet. Perfect for Arizona families using ESA funds for tutoring, curriculum, and educational services. Includes tools for managing student profiles, vendor information, reusable submission templates, and invoice generation.
+
+**Keywords**: Arizona ESA | Empowerment Scholarship Account | ClassWallet Automation | ESA Reimbursement | Arizona Educational | Direct Pay Automation
+
+---
+
+## ⚠️ Disclaimer & No Warranty
+
+**IMPORTANT: Please read this carefully before using ESA Helper.**
+
+### No Affiliation
+This tool is **not affiliated with, endorsed by, or officially connected to:**
+- ClassWallet (the payment platform)
+- The State of Arizona
+- The Arizona Department of Education
+- The Arizona ESA program or any government agency
+
+This is an **independent, third-party automation tool** created to help families manage their ESA submissions.
+
+### No Guarantees or Warranties
+**USE AT YOUR OWN RISK.** This software is provided "as-is" with:
+- **No warranty** of any kind, express or implied
+- **No guarantee** it will work with future versions of ClassWallet
+- **No liability** for any loss, damage, or incorrect submissions
+- **No support** beyond community help
+
+### Your Responsibility
+You are entirely responsible for:
+- Verifying that all submissions are correct before they're processed
+- Ensuring you comply with all Arizona ESA program rules and requirements
+- Checking your ClassWallet account after submissions to confirm they worked
+- Keeping your credentials and data secure
+- Backing up your data regularly
+
+### Important Notes
+- **ClassWallet updates may break the tool** - If ClassWallet changes their interface, this tool may stop working until selectors are updated
+- **Always verify submissions manually** - Don't assume the tool worked correctly; check ClassWallet to confirm
+- **Test with small amounts first** - Use templates and test submissions before processing large amounts
+- **Keep records** - Maintain your own records of all submissions independent of this tool
+
+### What We've Done Right
+The creator of this tool:
+- **Uses it personally** with their own ESA account and family
+- **Has tested thoroughly** across multiple submission types and scenarios
+- **Made significant efforts** to ensure reliability and security
+- **Maintains the code** and fixes issues as they're discovered
+- **Shares the code openly** so you can audit it and understand what it does
+
+### If Something Goes Wrong
+If the tool fails to submit or submits incorrectly:
+1. **Check ClassWallet immediately** - See what was actually submitted
+2. **Correct any errors manually** - Don't rely on the tool to fix itself
+3. **Report the issue** - Open a GitHub issue with details so it can be fixed
+4. **Contact ClassWallet support** - They are the authority on account issues
+
+---
 
 ## ✨ Features
 
@@ -35,6 +90,25 @@ ESA Helper is a comprehensive web application that automates ESA (Education Savi
   - ESA credentials setup
   - System requirements overview
   - OS-specific installation guide
+
+## 🎯 Use Cases
+
+**Perfect for Arizona families who use Empowerment Scholarship Accounts for:**
+
+- 👩‍🏫 **Tutoring Services** - Automate reimbursements for tutors and tutoring centers
+- 📚 **Curriculum Purchases** - Submit receipts for textbooks, workbooks, and educational materials
+- 🖥️ **Technology & Software** - Track computer equipment and educational software expenses
+- 🎨 **Enrichment Activities** - Manage payments for music lessons, sports, coding classes
+- 📋 **Vendor Payments** - Direct vendor payments with automatic invoice generation
+- 📊 **Batch Processing** - Handle multiple submissions efficiently with templates
+- 📁 **Documentation** - Professional invoice generation and expense tracking
+
+**Supports these Arizona ESA features:**
+- ClassWallet Reimbursement requests (personal reimbursement)
+- ClassWallet Direct Pay (vendor payments)
+- Multiple expense categories
+- Arizona ESA purse selection
+- Receipt and invoice documentation
 
 ## Installation
 
@@ -200,20 +274,35 @@ ESA-Helper-AZ/
 
 ## FAQ
 
-### Q: Is my password stored securely?
+### Q: Does this work with Arizona Empowerment Scholarship Accounts?
+A: Yes! ESA Helper is specifically designed for Arizona ESA families using ClassWallet. It automates both reimbursement requests and direct vendor payments (Direct Pay) through ClassWallet.
+
+### Q: What expense categories are supported?
+A: All Arizona ESA expense categories including: tutoring services, curriculum, computer hardware, supplemental materials, enrichment activities, and more. The app dynamically adapts to available categories in your ClassWallet account.
+
+### Q: Can I use this for tutoring reimbursements?
+A: Yes! ESA Helper is perfect for tutoring reimbursements. It automates the entire process from file upload to submission, and can create templates for recurring tutoring expenses.
+
+### Q: How much time does this save?
+A: Most families reduce submission time from 20-40 minutes to 5-25 minutes per submission. With templates for recurring expenses, you can save 70%+ of time.
+
+### Q: Is my ClassWallet password stored securely?
 A: Your ClassWallet credentials are stored locally in `config.json` on your computer. They are never sent to external servers. However, treat this file like a password - keep it private and don't share it.
 
-### Q: Can I use this for multiple families?
+### Q: Can I use this for multiple children/families?
 A: Yes! Download the app on multiple computers and configure each with different ESA credentials. You can also export data from one installation and import on another.
+
+### Q: Does this work with Direct Pay (vendor payments)?
+A: Yes! Full Direct Pay automation is supported. Configure vendors with their ClassWallet search terms for automatic vendor lookup and payment processing.
 
 ### Q: What if LibreOffice isn't installed?
 A: PDF generation will be skipped, but the Excel invoice will still be created. You can convert to PDF manually using Excel or another tool.
 
-### Q: How do I backup my data?
+### Q: How do I backup my ESA data?
 A: Go to Help → Data Backup & Migration and click "Download Backup File". Store it safely or share with family members.
 
-### Q: Can I modify templates?
-A: Yes! Go to Settings → Manage Templates. You can edit, add, or delete templates for each student.
+### Q: Can I create templates for recurring expenses?
+A: Yes! Go to Settings → Manage Templates. You can create templates for common expenses like weekly lessons, monthly subscriptions, or regular curriculum purchases.
 
 ### Q: Does this work on Mac/Windows/Linux?
 A: Yes! It works on all major operating systems. Just make sure Python, Chrome, and uv are installed.
@@ -387,6 +476,6 @@ MIT License - Feel free to modify and distribute
 
 ---
 
-**Made with ❤️ to save families time on ESA paperwork**
+**Made with ❤️ to help Arizona families manage Empowerment Scholarship Account expenses efficiently**
 
-Last Updated: November 3, 2025
+Last Updated: November 29, 2025
