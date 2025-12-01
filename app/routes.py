@@ -2137,6 +2137,10 @@ def get_analytics():
         if month_str:
             try:
                 selected_date = datetime.strptime(month_str, '%Y-%m')
+                # Set to end of month (last day at 23:59:59) for YTD calculations
+                import calendar
+                last_day = calendar.monthrange(selected_date.year, selected_date.month)[1]
+                selected_date = datetime(selected_date.year, selected_date.month, last_day, 23, 59, 59)
             except ValueError:
                 return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
         else:
