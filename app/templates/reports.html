@@ -183,7 +183,7 @@
                             <button type="button" class="btn btn-primary" onclick="loadAnalytics()">
                                 Load Analytics
                             </button>
-                            <button type="button" class="btn btn-outline-secondary" onclick="loadAnalytics()">
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetToCurrentMonth()">
                                 Reset to Current Month
                             </button>
                         </div>
@@ -274,9 +274,20 @@
         }
 
         function showLoadingIndicator(show) {
+            if (show) {
+                // Clear content when showing loading indicator
+                document.getElementById('analyticsContent').innerHTML = '';
+                document.getElementById('summarySection').style.display = 'none';
+            }
             document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
-            document.getElementById('analyticsContent').innerHTML = '';
-            document.getElementById('summarySection').style.display = 'none';
+        }
+
+        function resetToCurrentMonth() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            document.getElementById('monthSelector').value = `${year}-${month}`;
+            loadAnalytics();
         }
 
         function displayAnalytics(data) {
