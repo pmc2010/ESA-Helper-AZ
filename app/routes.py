@@ -76,6 +76,13 @@ def submission_history():
     return render_template('submission-history.html', current_page='submission_history')
 
 
+@main_bp.route('/reports')
+def reports():
+    """Render analytics and reporting dashboard"""
+    students = load_student_profiles()
+    return render_template('reports.html', students=students, current_page='reports')
+
+
 @main_bp.route('/data-migration')
 def data_migration():
     """Render data migration/backup page"""
@@ -2107,6 +2114,230 @@ def open_file_endpoint():
 
     except Exception as e:
         logger.error(f"Error opening file: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/reports/analytics', methods=['GET'])
+def get_analytics():
+    """Get analytics data for reporting dashboard
+
+    Query parameters:
+    - month: YYYY-MM (optional, defaults to current month)
+    - student_id: filter by specific student (optional)
+    """
+    try:
+        from datetime import datetime
+        import calendar
+
+        # Get query parameters
+        month_str = request.args.get('month')
+        student_id_filter = request.args.get('student_id')
+
+        # Parse month or use current
+        if month_str:
+            try:
+                selected_date = datetime.strptime(month_str, '%Y-%m')
+            except ValueError:
+                return jsonify({'error': 'Invalid month format. Use YYYY-MM'}), 400
+        else:
+            selected_date = datetime.now()
+
+        # Get fiscal year (Arizona FY: July 1 - June 30)
+        fiscal_year = selected_date.year if selected_date.month >= 7 else selected_date.year - 1
+
+        # Get all students and submissions
+        students = load_student_profiles()
+        submission_history = get_submission_history()
+
+        # Filter students if needed
+        if student_id_filter:
+            students = [s for s in students if s['id'] == student_id_filter]
+            if not students:
+                return jsonify({'error': 'Student not found'}), 404
+
+        # Build analytics data
+        analytics = {
+            'month': selected_date.strftime('%B %Y'),
+            'month_value': selected_date.strftime('%Y-%m'),
+            'fiscal_year': str(fiscal_year),
+            'students': []
+        }
+
+        for student in students:
+            # Get allotment for this fiscal year
+            allotments = student.get('esa_allotments', [])
+            allotment_data = next((a for a in allotments if a['fiscal_year'] == str(fiscal_year)), None)
+
+            # Filter submissions for this student and month
+            student_submissions = [
+                s for s in submission_history
+                if s.get('student') == student['name']
+            ]
+
+            # Filter by month
+            month_submissions = []
+            for sub in student_submissions:
+                try:
+                    sub_date = datetime.fromisoformat(sub['timestamp'])
+                    if sub_date.year == selected_date.year and sub_date.month == selected_date.month:
+                        month_submissions.append(sub)
+                except (ValueError, KeyError):
+                    continue
+
+            # Calculate totals
+            total_amount = sum(float(s.get('amount', 0)) for s in month_submissions)
+            submission_count = len(month_submissions)
+            avg_amount = total_amount / submission_count if submission_count > 0 else 0
+
+            # YTD calculations (July 1 to current date)
+            fy_start = datetime(fiscal_year, 7, 1)
+            ytd_submissions = []
+            for sub in student_submissions:
+                try:
+                    sub_date = datetime.fromisoformat(sub['timestamp'])
+                    if sub_date >= fy_start and sub_date <= selected_date:
+                        ytd_submissions.append(sub)
+                except (ValueError, KeyError):
+                    continue
+
+            ytd_amount = sum(float(s.get('amount', 0)) for s in ytd_submissions)
+            ytd_count = len(ytd_submissions)
+
+            # Annualized rate (if this month is not empty)
+            if submission_count > 0:
+                annualized_rate = (total_amount / selected_date.day) * 365
+            else:
+                annualized_rate = 0
+
+            student_data = {
+                'id': student['id'],
+                'name': student['name'],
+                'month_submissions': submission_count,
+                'month_total': round(total_amount, 2),
+                'month_average': round(avg_amount, 2),
+                'ytd_submissions': ytd_count,
+                'ytd_total': round(ytd_amount, 2),
+                'annualized_rate': round(annualized_rate, 2),
+                'allotment': None
+            }
+
+            # Add allotment data if available
+            if allotment_data:
+                annual_amount = allotment_data['annual_amount']
+                remaining = annual_amount - ytd_amount
+                percent_used = (ytd_amount / annual_amount * 100) if annual_amount > 0 else 0
+
+                student_data['allotment'] = {
+                    'annual_amount': round(annual_amount, 2),
+                    'ytd_remaining': round(remaining, 2),
+                    'percent_used': round(percent_used, 1),
+                    'quarterly_amounts': allotment_data.get('quarterly_amounts')
+                }
+
+            analytics['students'].append(student_data)
+
+        return jsonify(analytics), 200
+    except Exception as e:
+        logger.error(f"Error generating analytics: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/students/<student_id>/allotments', methods=['GET'])
+def get_student_allotments(student_id):
+    """Get ESA allotments for a student"""
+    try:
+        students = load_student_profiles()
+        student = next((s for s in students if s['id'] == student_id), None)
+
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+
+        allotments = student.get('esa_allotments', [])
+        return jsonify({'allotments': allotments}), 200
+    except Exception as e:
+        logger.error(f"Error fetching allotments: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/students/<student_id>/allotments', methods=['POST'])
+def add_student_allotment(student_id):
+    """Add or update an ESA allotment for a student"""
+    try:
+        students = load_student_profiles()
+        student = next((s for s in students if s['id'] == student_id), None)
+
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+
+        data = request.json
+        fiscal_year = data.get('fiscal_year')
+        annual_amount = data.get('annual_amount')
+        quarterly_amounts = data.get('quarterly_amounts')
+
+        if not fiscal_year or annual_amount is None:
+            return jsonify({'error': 'fiscal_year and annual_amount are required'}), 400
+
+        # Initialize allotments list if it doesn't exist
+        if 'esa_allotments' not in student:
+            student['esa_allotments'] = []
+
+        # Check if allotment for this year already exists
+        existing = next((a for a in student['esa_allotments'] if a['fiscal_year'] == fiscal_year), None)
+
+        allotment = {
+            'fiscal_year': fiscal_year,
+            'annual_amount': float(annual_amount),
+            'quarterly_amounts': quarterly_amounts,
+            'recorded_date': datetime.now().isoformat()
+        }
+
+        if existing:
+            # Update existing allotment
+            existing.update(allotment)
+            logger.info(f"✓ Updated allotment for {student['name']} FY{fiscal_year}")
+        else:
+            # Add new allotment
+            student['esa_allotments'].append(allotment)
+            logger.info(f"✓ Added allotment for {student['name']} FY{fiscal_year}")
+
+        # Save to file
+        students_file = DATA_DIR / 'students.json'
+        with open(students_file, 'w') as f:
+            json.dump({'students': students}, f, indent=2)
+
+        return jsonify({'success': True, 'allotment': allotment}), 201
+    except Exception as e:
+        logger.error(f"Error adding allotment: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@api_bp.route('/students/<student_id>/allotments/<fiscal_year>', methods=['DELETE'])
+def delete_student_allotment(student_id, fiscal_year):
+    """Delete an ESA allotment for a student"""
+    try:
+        students = load_student_profiles()
+        student = next((s for s in students if s['id'] == student_id), None)
+
+        if not student:
+            return jsonify({'error': 'Student not found'}), 404
+
+        allotments = student.get('esa_allotments', [])
+        allotment = next((a for a in allotments if a['fiscal_year'] == fiscal_year), None)
+
+        if not allotment:
+            return jsonify({'error': 'Allotment not found'}), 404
+
+        allotments.remove(allotment)
+
+        # Save to file
+        students_file = DATA_DIR / 'students.json'
+        with open(students_file, 'w') as f:
+            json.dump({'students': students}, f, indent=2)
+
+        logger.info(f"✓ Deleted allotment for {student['name']} FY{fiscal_year}")
+        return jsonify({'success': True}), 200
+    except Exception as e:
+        logger.error(f"Error deleting allotment: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 

@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESA Helper - Reports & Analytics</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .reports-container {
+            max-width: 1400px;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            border-radius: 8px;
+            border: none;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .metric-label {
+            font-size: 0.85rem;
+            color: #666;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #333;
+            margin-top: 0.5rem;
+        }
+        .metric-value.currency {
+            color: #28a745;
+        }
+        .budget-bar {
+            height: 24px;
+            border-radius: 4px;
+            background-color: #e9ecef;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        .budget-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .budget-fill.warning {
+            background: linear-gradient(90deg, #ffc107, #fd7e14);
+        }
+        .budget-fill.danger {
+            background: linear-gradient(90deg, #dc3545, #c82333);
+        }
+        .budget-text {
+            font-size: 0.8rem;
+            color: #666;
+            margin-top: 0.3rem;
+        }
+        .student-section {
+            border-left: 4px solid #007bff;
+            padding-left: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .student-section h4 {
+            color: #333;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .month-selector {
+            max-width: 400px;
+        }
+        .no-allotment {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 4px;
+            color: #666;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .header-controls {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            margin-bottom: 2rem;
+        }
+        .spinner {
+            text-align: center;
+            padding: 3rem;
+        }
+        .comparison-table {
+            font-size: 0.9rem;
+        }
+        .comparison-table thead {
+            background-color: #f8f9fa;
+        }
+        .comparison-table th {
+            border-top: none;
+            font-weight: 600;
+            color: #555;
+        }
+        .amount-cell {
+            text-align: right;
+            font-weight: 500;
+        }
+        .warning-text {
+            color: #ffc107;
+            font-weight: 600;
+        }
+        .danger-text {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .success-text {
+            color: #28a745;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <strong>ESA Helper</strong>
+                <span class="navbar-text text-light" style="font-size: 0.9rem; margin-left: 0.5rem;">Reports & Analytics</span>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Back to Submit</a>
+                    </li>
+                    {% include '_settings_dropdown.html' %}
+                    {% include '_help_dropdown.html' %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container reports-container">
+        <div class="row">
+            <div class="col-lg-12">
+                <!-- Header -->
+                <div class="card mb-4 border-primary border-start border-5">
+                    <div class="card-header bg-light">
+                        <h3 class="mb-0">Budget & Spending Analytics</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted mb-0">
+                            Track spending against your ESA allotments. Select a month to compare actual spending with budgeted amounts.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Month Selector -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="header-controls">
+                            <div class="month-selector">
+                                <label for="monthSelector" class="form-label fw-bold">Select Month:</label>
+                                <input type="month" id="monthSelector" class="form-control">
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="loadAnalytics()">
+                                Load Analytics
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="loadAnalytics()">
+                                Reset to Current Month
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="loadingIndicator" class="card mb-4" style="display: none;">
+                    <div class="card-body spinner">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="text-muted mt-2">Loading analytics...</p>
+                    </div>
+                </div>
+
+                <!-- Analytics Content -->
+                <div id="analyticsContent"></div>
+
+                <!-- Summary Table -->
+                <div id="summarySection" class="card mb-4" style="display: none;">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Summary Comparison</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table comparison-table mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th class="amount-cell">Submissions</th>
+                                        <th class="amount-cell">Month Total</th>
+                                        <th class="amount-cell">Month Avg</th>
+                                        <th class="amount-cell">YTD Total</th>
+                                        <th class="amount-cell">Annual Budget</th>
+                                        <th class="amount-cell">Budget Used</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="summaryTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mb-4">
+                    <a href="/" class="btn btn-secondary">Back to Main Form</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize month selector to current month
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            document.getElementById('monthSelector').value = `${year}-${month}`;
+            loadAnalytics();
+        });
+
+        function loadAnalytics() {
+            const monthValue = document.getElementById('monthSelector').value;
+
+            if (!monthValue) {
+                alert('Please select a month');
+                return;
+            }
+
+            showLoadingIndicator(true);
+
+            fetch(`/api/reports/analytics?month=${monthValue}`)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                    return response.json();
+                })
+                .then(data => {
+                    displayAnalytics(data);
+                    showLoadingIndicator(false);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showError('Failed to load analytics. Please try again.');
+                    showLoadingIndicator(false);
+                });
+        }
+
+        function showLoadingIndicator(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+            document.getElementById('analyticsContent').innerHTML = '';
+            document.getElementById('summarySection').style.display = 'none';
+        }
+
+        function displayAnalytics(data) {
+            const container = document.getElementById('analyticsContent');
+            const summaryBody = document.getElementById('summaryTableBody');
+
+            if (!data.students || data.students.length === 0) {
+                container.innerHTML = `
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <h5 class="text-muted">No data available</h5>
+                            <p class="text-muted mb-0">No submissions found for this month.</p>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            // Clear containers
+            container.innerHTML = '';
+            summaryBody.innerHTML = '';
+
+            // Display each student's analytics
+            data.students.forEach(student => {
+                container.appendChild(createStudentSection(student));
+                summaryBody.appendChild(createSummaryRow(student));
+            });
+
+            // Show summary section
+            document.getElementById('summarySection').style.display = 'block';
+        }
+
+        function createStudentSection(student) {
+            const div = document.createElement('div');
+            div.className = 'card mb-4';
+
+            const headerColor = getStudentColor(student.name);
+            const studentTitle = document.createElement('div');
+            studentTitle.className = 'card-header';
+            studentTitle.style.borderLeft = `4px solid ${headerColor}`;
+            studentTitle.innerHTML = `<h5 class="mb-0">${student.name}</h5>`;
+
+            const body = document.createElement('div');
+            body.className = 'card-body';
+
+            // Metrics grid
+            const metricsHtml = `
+                <div class="analytics-grid">
+                    <div class="metric-card bg-white p-3">
+                        <div class="metric-label">Month Submissions</div>
+                        <div class="metric-value">${student.month_submissions}</div>
+                    </div>
+                    <div class="metric-card bg-white p-3">
+                        <div class="metric-label">Month Spending</div>
+                        <div class="metric-value currency">$${student.month_total.toFixed(2)}</div>
+                    </div>
+                    <div class="metric-card bg-white p-3">
+                        <div class="metric-label">Month Average</div>
+                        <div class="metric-value currency">$${student.month_average.toFixed(2)}</div>
+                    </div>
+                    <div class="metric-card bg-white p-3">
+                        <div class="metric-label">Annualized Rate</div>
+                        <div class="metric-value currency">$${student.annualized_rate.toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
+
+            body.innerHTML = metricsHtml;
+
+            // Add budget info if available
+            if (student.allotment) {
+                const budgetHtml = createBudgetSection(student);
+                body.appendChild(budgetHtml);
+            } else {
+                const noAllotment = document.createElement('div');
+                noAllotment.className = 'no-allotment mt-3';
+                noAllotment.innerHTML = '⚠️ No ESA allotment configured for this student. Add one to see budget comparisons.';
+                body.appendChild(noAllotment);
+            }
+
+            div.appendChild(studentTitle);
+            div.appendChild(body);
+            return div;
+        }
+
+        function createBudgetSection(student) {
+            const allotment = student.allotment;
+            const container = document.createElement('div');
+            container.className = 'mt-4 pt-3 border-top';
+
+            const percentUsed = allotment.percent_used;
+            let barClass = '';
+            if (percentUsed > 100) {
+                barClass = 'danger';
+            } else if (percentUsed > 80) {
+                barClass = 'warning';
+            }
+
+            container.innerHTML = `
+                <h6 class="mb-3">Budget Status (FY ${new Date().getFullYear()})</h6>
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <div class="metric-card bg-white p-3">
+                            <div class="metric-label">Annual Allotment</div>
+                            <div class="metric-value currency">$${allotment.annual_amount.toFixed(2)}</div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="metric-card bg-white p-3">
+                            <div class="metric-label">YTD Remaining</div>
+                            <div class="metric-value currency">$${allotment.ytd_remaining.toFixed(2)}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="budget-bar">
+                    <div class="budget-fill ${barClass}" style="width: ${Math.min(percentUsed, 100)}%">
+                        ${percentUsed > 10 ? percentUsed.toFixed(1) + '%' : ''}
+                    </div>
+                </div>
+                <div class="budget-text">
+                    <strong>$${student.ytd_total.toFixed(2)}</strong> of <strong>$${allotment.annual_amount.toFixed(2)}</strong> spent (${percentUsed.toFixed(1)}%)
+                    ${percentUsed > 100 ? '<span class="danger-text d-block mt-2">⚠️ Budget exceeded!</span>' : ''}
+                </div>
+            `;
+
+            return container;
+        }
+
+        function createSummaryRow(student) {
+            const tr = document.createElement('tr');
+
+            const allotmentInfo = student.allotment ?
+                `$${student.allotment.annual_amount.toFixed(2)}` :
+                'Not Set';
+
+            const budgetUsed = student.allotment ?
+                `${student.allotment.percent_used.toFixed(1)}%` :
+                '—';
+
+            const budgetClass = student.allotment && student.allotment.percent_used > 100 ? 'danger-text' :
+                                student.allotment && student.allotment.percent_used > 80 ? 'warning-text' :
+                                'success-text';
+
+            tr.innerHTML = `
+                <td><strong>${student.name}</strong></td>
+                <td class="amount-cell">${student.month_submissions}</td>
+                <td class="amount-cell">$${student.month_total.toFixed(2)}</td>
+                <td class="amount-cell">$${student.month_average.toFixed(2)}</td>
+                <td class="amount-cell">$${student.ytd_total.toFixed(2)}</td>
+                <td class="amount-cell">${allotmentInfo}</td>
+                <td class="amount-cell"><span class="${budgetClass}">${budgetUsed}</span></td>
+            `;
+
+            return tr;
+        }
+
+        function getStudentColor(studentName) {
+            const colors = {
+                'Taylor Curtis': '#007bff',
+                'Allie Curtis': '#28a745',
+                'Evelyn Curtis': '#dc3545'
+            };
+            return colors[studentName] || '#6c757d';
+        }
+
+        function showError(message) {
+            const container = document.getElementById('analyticsContent');
+            container.innerHTML = `
+                <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>
