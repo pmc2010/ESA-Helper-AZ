@@ -312,7 +312,7 @@
 
             // Display each student's analytics
             data.students.forEach(student => {
-                container.appendChild(createStudentSection(student));
+                container.appendChild(createStudentSection(student, data.fiscal_year_display));
                 summaryBody.appendChild(createSummaryRow(student));
             });
 
@@ -320,7 +320,7 @@
             document.getElementById('summarySection').style.display = 'block';
         }
 
-        function createStudentSection(student) {
+        function createStudentSection(student, fiscalYearDisplay) {
             const div = document.createElement('div');
             div.className = 'card mb-4';
 
@@ -359,7 +359,7 @@
 
             // Add budget info if available
             if (student.allotment) {
-                const budgetHtml = createBudgetSection(student);
+                const budgetHtml = createBudgetSection(student, fiscalYearDisplay);
                 body.appendChild(budgetHtml);
             } else {
                 const noAllotment = document.createElement('div');
@@ -373,7 +373,7 @@
             return div;
         }
 
-        function createBudgetSection(student) {
+        function createBudgetSection(student, fiscalYearDisplay) {
             const allotment = student.allotment;
             const container = document.createElement('div');
             container.className = 'mt-4 pt-3 border-top';
@@ -387,7 +387,7 @@
             }
 
             container.innerHTML = `
-                <h6 class="mb-3">Budget Status (FY ${new Date().getFullYear()})</h6>
+                <h6 class="mb-3">Budget Status (${fiscalYearDisplay})</h6>
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <div class="metric-card bg-white p-3">

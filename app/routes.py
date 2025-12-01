@@ -2160,10 +2160,14 @@ def get_analytics():
                 return jsonify({'error': 'Student not found'}), 404
 
         # Build analytics data
+        # Fiscal year format: FY 2026 means July 2025 - June 2026
+        fy_start_year = fiscal_year - 1
+        fy_end_year = fiscal_year
         analytics = {
             'month': selected_date.strftime('%B %Y'),
             'month_value': selected_date.strftime('%Y-%m'),
             'fiscal_year': str(fiscal_year),
+            'fiscal_year_display': f"FY {fiscal_year} ({fy_start_year}-{fy_end_year})",
             'students': []
         }
 
