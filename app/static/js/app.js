@@ -167,6 +167,7 @@ document.addEventListener('DOMContentLoaded', function() {
     loadVendors();
     checkCredentials();
     initializeLineItems();
+    checkAnnualAllotmentPrompt();
 });
 
 /**
@@ -348,6 +349,89 @@ async function loadVendors() {
     } catch (error) {
         console.error('Error loading vendors:', error);
     }
+}
+
+/**
+ * Check if it's November 1 and show prompt to enter annual ESA allotments
+ */
+function checkAnnualAllotmentPrompt() {
+    try {
+        const today = new Date();
+        const month = today.getMonth() + 1; // 1-12
+        const dayOfMonth = today.getDate();
+
+        // Check if today is November 1
+        if (month === 11 && dayOfMonth === 1) {
+            // Check if user has already been prompted today (using localStorage)
+            const lastPromptDate = localStorage.getItem('allotmentPromptDate');
+            const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
+            if (lastPromptDate !== todayStr) {
+                // Show the prompt
+                showAllotmentPrompt();
+                localStorage.setItem('allotmentPromptDate', todayStr);
+            }
+        }
+    } catch (error) {
+        console.error('Error checking allotment prompt:', error);
+    }
+}
+
+/**
+ * Display the November 1 allotment prompt modal
+ */
+function showAllotmentPrompt() {
+    const html = `
+        <div class="modal fade" id="allotmentPromptModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-warning bg-opacity-10 border-warning">
+                        <h5 class="modal-title">
+                            <i class="bi bi-calendar-event"></i> Annual ESA Allotment Update
+                        </h5>
+                    </div>
+                    <div class="modal-body">
+                        <p>
+                            <strong>It's time to update your ESA allotments!</strong>
+                        </p>
+                        <p class="text-muted mb-3">
+                            The Arizona Department of Education typically recalculates student allotments in October
+                            based on updated school district budget data. Have you received your updated award letters?
+                        </p>
+                        <p>
+                            You can enter your updated allotment amounts in the <strong>Manage Students</strong> section
+                            to track spending against your budget throughout the year.
+                        </p>
+                        <p class="text-muted small mb-0">
+                            💡 <strong>Tip:</strong> This prompt appears once per year on November 1. You can dismiss it and add your allotments anytime.
+                        </p>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                            Maybe Later
+                        </button>
+                        <a href="/manage-students" class="btn btn-warning">
+                            Go to Manage Students
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add modal to DOM
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container);
+
+    // Show the modal
+    const modal = new bootstrap.Modal(document.getElementById('allotmentPromptModal'));
+    modal.show();
+
+    // Clean up modal when hidden
+    document.getElementById('allotmentPromptModal').addEventListener('hidden.bs.modal', function() {
+        container.remove();
+    });
 }
 
 /**
