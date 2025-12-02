@@ -193,6 +193,7 @@ function validateForm() {
     const storeName = document.getElementById('storeName').value;
     const amount = document.getElementById('amount').value;
     const category = document.getElementById('expenseCategory').value;
+    const isManualEntry = document.getElementById('manualEntryToggle').checked;
 
     // Check all required fields are filled
     // Amount needs special handling because 0 is falsy but we need amount > 0
@@ -205,16 +206,20 @@ function validateForm() {
     }
 
     // Check if all required files are uploaded for the selected category
-    const categoryConfig = getCategoryConfig();
-    // Extract required_fields from the category config object
-    const requiredFiles = categoryConfig[category]?.required_fields || [];
-    // Convert field names to lowercase for comparison with selectedFiles keys
-    const requiredFilesLower = requiredFiles.map(f => f.toLowerCase());
-    const allFilesUploaded = requiredFilesLower.every(ft => {
-        const hasFile = !!selectedFiles[ft];
-        console.log(`    Checking if selectedFiles['${ft}'] exists:`, hasFile);
-        return hasFile;
-    });
+    // UNLESS this is a manual entry (manual entries don't require files)
+    let allFilesUploaded = true;
+    if (!isManualEntry) {
+        const categoryConfig = getCategoryConfig();
+        // Extract required_fields from the category config object
+        const requiredFiles = categoryConfig[category]?.required_fields || [];
+        // Convert field names to lowercase for comparison with selectedFiles keys
+        const requiredFilesLower = requiredFiles.map(f => f.toLowerCase());
+        allFilesUploaded = requiredFilesLower.every(ft => {
+            const hasFile = !!selectedFiles[ft];
+            console.log(`    Checking if selectedFiles['${ft}'] exists:`, hasFile);
+            return hasFile;
+        });
+    }
 
     const submitBtn = document.getElementById('submitBtn');
     const isValid = isFormValid && allFilesUploaded;
@@ -240,6 +245,31 @@ function validateForm() {
     submitBtn.disabled = !isValid;
 
     return isValid;
+}
+
+/**
+ * Toggle manual entry mode
+ */
+function toggleManualEntry(isManual) {
+    const fileUploadCard = document.getElementById('fileUploadCard');
+    const submitBtnText = document.getElementById('submitBtnText');
+
+    if (isManual) {
+        // Hide file upload section
+        fileUploadCard.style.display = 'none';
+        // Change button text
+        submitBtnText.textContent = 'Log Transaction';
+        // Clear any selected files
+        selectedFiles = {};
+    } else {
+        // Show file upload section
+        fileUploadCard.style.display = 'block';
+        // Change button text back
+        submitBtnText.textContent = 'Review & Submit';
+    }
+
+    // Re-validate the form
+    validateForm();
 }
 
 /**
@@ -304,6 +334,11 @@ function initializeForm() {
 
     // Vendor management
     document.getElementById('saveVendorBtn').addEventListener('click', addVendor);
+
+    // Manual entry toggle
+    document.getElementById('manualEntryToggle').addEventListener('change', function() {
+        toggleManualEntry(this.checked);
+    });
 
     // Confirmation
     document.getElementById('confirmSubmitBtn').addEventListener('click', confirmSubmit);
@@ -1032,25 +1067,69 @@ function onSubmit(event) {
     const storeName = document.getElementById('storeName').value;
     const amount = document.getElementById('amount').value;
     const category = document.getElementById('expenseCategory').value;
+    const isManualEntry = document.getElementById('manualEntryToggle').checked;
 
     if (!student || !requestType || !storeName || !amount || !category) {
         alert('Please fill in all required fields');
         return;
     }
 
-    // Validate required files
-    const categoryConfig = getCategoryConfig();
-    const requiredFiles = categoryConfig[category]?.required_fields || [];
-    const requiredFilesLower = requiredFiles.map(f => f.toLowerCase());
-    const missingFiles = requiredFilesLower.filter(ft => !selectedFiles[ft]);
+    // Only validate required files if NOT a manual entry
+    if (!isManualEntry) {
+        const categoryConfig = getCategoryConfig();
+        const requiredFiles = categoryConfig[category]?.required_fields || [];
+        const requiredFilesLower = requiredFiles.map(f => f.toLowerCase());
+        const missingFiles = requiredFilesLower.filter(ft => !selectedFiles[ft]);
 
-    if (missingFiles.length > 0) {
-        alert(`Please upload required files: ${missingFiles.join(', ')}`);
-        return;
+        if (missingFiles.length > 0) {
+            alert(`Please upload required files: ${missingFiles.join(', ')}`);
+            return;
+        }
     }
 
     // Show confirmation
-    showConfirmation();
+    isManualEntry ? showManualEntryConfirmation() : showConfirmation();
+}
+
+/**
+ * Show manual entry confirmation modal
+ */
+function showManualEntryConfirmation() {
+    const student = document.getElementById('student').value;
+    const studentName = getStudentNameFromId(student);
+    const requestType = document.getElementById('requestType').value;
+    const storeName = document.getElementById('storeName').value;
+    const amount = document.getElementById('amount').value;
+    const category = document.getElementById('expenseCategory').value;
+    const poNumber = document.getElementById('poNumber').value;
+    const comment = document.getElementById('comment').value;
+
+    let html = `
+        <div class="alert alert-info">
+            <strong>📝 Manual Entry</strong><br>
+            <small>This transaction will be logged for reporting and budget tracking. No automation will occur.</small>
+        </div>
+
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <p><strong>Student:</strong> ${studentName}</p>
+                <p><strong>Request Type:</strong> ${requestType}</p>
+                <p><strong>Store/Vendor:</strong> ${storeName}</p>
+                <p><strong>Amount:</strong> $${parseFloat(amount).toFixed(2)}</p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>Expense Category:</strong> ${category}</p>
+                <p><strong>PO Number:</strong> ${poNumber}</p>
+                <p><strong>Comment:</strong> ${comment}</p>
+            </div>
+        </div>
+    `;
+
+    document.getElementById('confirmationContent').innerHTML = html;
+    document.getElementById('confirmSubmitBtn').textContent = 'Log Transaction';
+
+    const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    modal.show();
 }
 
 /**
@@ -1125,6 +1204,7 @@ async function confirmSubmit() {
     const category = document.getElementById('expenseCategory').value;
     const poNumber = document.getElementById('poNumber').value;
     const comment = document.getElementById('comment').value;
+    const isManualEntry = document.getElementById('manualEntryToggle').checked;
 
     // Ensure amount always has 2 decimal places (e.g., 100 becomes 100.00)
     amount = parseFloat(amount).toFixed(2);
@@ -1135,9 +1215,15 @@ async function confirmSubmit() {
         amount: amount,
         expense_category: category,
         po_number: poNumber,
-        comment: comment,
-        files: selectedFiles
+        comment: comment
     };
+
+    // For manual entries, add source flag
+    if (isManualEntry) {
+        submitData.source = 'manual';
+    } else {
+        submitData.files = selectedFiles;
+    }
 
     // Handle store_name vs vendor_name based on request type
     if (requestType === 'Direct Pay') {
@@ -1145,7 +1231,7 @@ async function confirmSubmit() {
         submitData.vendor_name = storeName;
 
         // Add vendor search term for Direct Pay if available
-        if (selectedVendorId) {
+        if (!isManualEntry && selectedVendorId) {
             const vendor = vendors.find(v => v.id === selectedVendorId);
             if (vendor && vendor.classwallet_search_term) {
                 submitData.classwallet_search_term = vendor.classwallet_search_term;
@@ -1158,7 +1244,9 @@ async function confirmSubmit() {
     }
 
     try {
-        const response = await fetch('/api/submit', {
+        // Use different endpoint for manual vs automated submissions
+        const endpoint = isManualEntry ? '/api/manual-submission' : '/api/submit';
+        const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(submitData)
@@ -1177,26 +1265,31 @@ async function confirmSubmit() {
 
             // Show success modal
             document.getElementById('successPoNumber').textContent = result.po_number || poNumber;
+            const successTitle = isManualEntry ? 'Transaction Logged' : 'Submitted Successfully';
+            document.querySelector('#successModal .modal-title').textContent = successTitle;
             new bootstrap.Modal(document.getElementById('successModal')).show();
 
             // Re-enable button since submission is complete
             confirmSubmitBtn.disabled = false;
             confirmSubmitBtn.textContent = originalBtnText;
 
-            // Refresh recent submissions (wait longer since ClassWallet automation may be running)
+            // Refresh recent submissions
             if (typeof window.loadRecentSubmissions === 'function') {
                 console.log('Scheduling submission history refresh...');
-                // Wait longer (3 seconds) for ClassWallet automation to complete and log results
+                // For manual entries, refresh immediately; for automated, wait for ClassWallet automation
+                const delay = isManualEntry ? 500 : 3000;
                 setTimeout(() => {
                     console.log('Calling loadRecentSubmissions()...');
                     window.loadRecentSubmissions();
-                }, 3000);
+                }, delay);
             } else {
                 console.warn('loadRecentSubmissions function not available');
             }
 
-            // Trigger ClassWallet automation in the background
-            triggerClassWalletAutomation(submitData);
+            // Only trigger ClassWallet automation for non-manual submissions
+            if (!isManualEntry) {
+                triggerClassWalletAutomation(submitData);
+            }
         } else {
             // Hide confirmation modal before showing error modal
             bootstrap.Modal.getInstance(document.getElementById('confirmationModal')).hide();
