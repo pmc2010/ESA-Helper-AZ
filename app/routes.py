@@ -665,9 +665,15 @@ def get_po_number():
 @api_bp.route('/config/credentials', methods=['GET'])
 def get_credentials_status():
     """Check if credentials are configured"""
-    if CONFIG_FILE.exists():
-        return jsonify({'configured': True})
-    return jsonify({'configured': False})
+    config = load_config()
+    has_email = bool(config and config.get('email'))
+    has_password = bool(config and config.get('password'))
+    is_configured = has_email and has_password
+
+    # Debug logging
+    logger.debug(f"Credentials status check - Config exists: {config is not None}, Has email: {has_email}, Has password: {has_password}, Configured: {is_configured}")
+
+    return jsonify({'configured': is_configured})
 
 
 @api_bp.route('/config/credentials', methods=['POST'])
@@ -971,6 +977,160 @@ def submit_reimbursement():
     result = submit_to_classwallet(data, auto_submit=auto_submit)
 
     return jsonify(result)
+
+
+@api_bp.route('/manual-submission', methods=['POST'])
+def manual_submission():
+    """Log a manual transaction (not processed through ClassWallet automation)"""
+    from app.utils import log_submission
+
+    data = request.json
+
+    # Validate required fields
+    required_fields = ['student', 'request_type', 'amount', 'expense_category', 'po_number', 'comment', 'entry_date']
+    if not all(field in data for field in required_fields):
+        return jsonify({'success': False, 'message': 'Missing required fields'}), 400
+
+    # Validate request-type-specific fields
+    request_type = data.get('request_type')
+    if request_type == 'Reimbursement':
+        if 'store_name' not in data:
+            return jsonify({'success': False, 'message': 'Missing required fields (store_name)'}), 400
+        vendor_or_store = data.get('store_name')
+    elif request_type == 'Direct Pay':
+        if 'vendor_name' not in data:
+            return jsonify({'success': False, 'message': 'Missing required fields (vendor_name)'}), 400
+        vendor_or_store = data.get('vendor_name')
+    else:
+        return jsonify({'success': False, 'message': 'Invalid request type'}), 400
+
+    try:
+        # Create submission record
+        submission_record = {
+            'type': 'manual_entry',
+            'source': 'manual',
+            'student': data.get('student'),
+            'request_type': request_type,
+            'amount': float(data.get('amount', 0)),
+            'po_number': data.get('po_number'),
+            'expense_category': data.get('expense_category'),
+            'comment': data.get('comment'),
+            'entry_date': data.get('entry_date')
+        }
+
+        # Add request-type-specific field
+        if request_type == 'Reimbursement':
+            submission_record['store_name'] = data.get('store_name')
+        elif request_type == 'Direct Pay':
+            submission_record['vendor_name'] = data.get('vendor_name')
+
+        # Log the manual submission
+        log_submission(submission_record, created_by='manual')
+
+        logger.info(f"✓ Manual submission logged for {data.get('student')}: ${data.get('amount')} to {vendor_or_store} (PO: {data.get('po_number')})")
+
+        return jsonify({
+            'success': True,
+            'message': 'Manual transaction logged successfully',
+            'po_number': data.get('po_number')
+        }), 201
+
+    except Exception as e:
+        logger.error(f"Error logging manual submission: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@api_bp.route('/manual-submission/<po_number>', methods=['PUT'])
+def update_manual_submission(po_number):
+    """Update an existing manual submission"""
+    from app.utils import get_submission_history
+
+    data = request.json
+
+    try:
+        # Get current submission history
+        history = get_submission_history()
+
+        # Find the submission by po_number
+        submission = next((s for s in history if s.get('po_number') == po_number and s.get('source') == 'manual'), None)
+        if not submission:
+            return jsonify({'success': False, 'message': 'Manual submission not found'}), 404
+
+        # Update allowed fields (don't update timestamp, date logged, or created_by)
+        if 'vendor_name' in data and submission.get('request_type') == 'Direct Pay':
+            submission['vendor_name'] = data.get('vendor_name')
+        if 'store_name' in data and submission.get('request_type') == 'Reimbursement':
+            submission['store_name'] = data.get('store_name')
+        if 'amount' in data:
+            submission['amount'] = float(data.get('amount'))
+        if 'expense_category' in data:
+            submission['expense_category'] = data.get('expense_category')
+        if 'comment' in data:
+            submission['comment'] = data.get('comment')
+
+        # Update master history file
+        log_dir = Path(__file__).parent.parent / 'logs'
+        history_file = log_dir / 'submission_history.json'
+
+        with open(history_file, 'r') as f:
+            all_data = json.load(f)
+
+        # Update the submission in the history
+        submissions = all_data.get('submissions', [])
+        for i, s in enumerate(submissions):
+            if s.get('po_number') == po_number and s.get('source') == 'manual':
+                submissions[i] = submission
+                break
+
+        all_data['submissions'] = submissions
+
+        with open(history_file, 'w') as f:
+            json.dump(all_data, f, indent=2)
+
+        logger.info(f"✓ Manual submission updated for PO: {po_number}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Manual submission updated successfully',
+            'submission': submission
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error updating manual submission: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+
+
+@api_bp.route('/manual-submission/<po_number>', methods=['DELETE'])
+def delete_manual_submission(po_number):
+    """Delete a manual submission by PO number"""
+    from app.utils import get_submission_history, delete_submission
+
+    try:
+        # Find the submission by po_number
+        history = get_submission_history()
+        submission = next((s for s in history if s.get('po_number') == po_number and s.get('source') == 'manual'), None)
+
+        if not submission:
+            return jsonify({'success': False, 'message': 'Manual submission not found'}), 404
+
+        # Get the timestamp to delete the submission
+        timestamp = submission.get('timestamp')
+        if not timestamp:
+            return jsonify({'success': False, 'message': 'Invalid submission timestamp'}), 400
+
+        # Delete the submission
+        if delete_submission(timestamp):
+            logger.info(f"✓ Manual submission deleted for PO: {po_number}")
+            return jsonify({
+                'success': True,
+                'message': 'Manual submission deleted successfully'
+            }), 200
+        else:
+            return jsonify({'success': False, 'message': 'Failed to delete submission'}), 500
+
+    except Exception as e:
+        logger.error(f"Error deleting manual submission: {str(e)}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 
 @api_bp.route('/students', methods=['POST'])

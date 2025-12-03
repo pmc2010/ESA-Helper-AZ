@@ -193,11 +193,19 @@ function validateForm() {
     const storeName = document.getElementById('storeName').value;
     const amount = document.getElementById('amount').value;
     const category = document.getElementById('expenseCategory').value;
-    const isManualEntry = document.getElementById('manualEntryToggle').checked;
+    const manualToggleElement = document.getElementById('manualEntryToggle');
+    const isManualEntry = manualToggleElement ? manualToggleElement.checked : false;
+    const entryDateElement = document.getElementById('entryDate');
+    const entryDate = entryDateElement ? entryDateElement.value : '';
 
     // Check all required fields are filled
     // Amount needs special handling because 0 is falsy but we need amount > 0
     let isFormValid = student && requestType && storeName && (parseFloat(amount) > 0) && category;
+
+    // For manual entries, also require entry_date
+    if (isManualEntry) {
+        isFormValid = isFormValid && entryDate;
+    }
 
     // For Direct Pay, vendor must have a classwallet_search_term configured
     if (isFormValid && requestType === 'Direct Pay' && vendorMissingSearchTerm) {
@@ -226,18 +234,27 @@ function validateForm() {
 
     // Debug logging - always show state when validation called
     console.log('Form Validation Debug:');
+    console.log('  Manual Entry:', isManualEntry ? '✓ ENABLED' : '✗ DISABLED');
     console.log('  Student Value:', JSON.stringify(student), student ? '✓ FILLED' : '✗ EMPTY');
     console.log('  RequestType Value:', JSON.stringify(requestType), requestType ? '✓ FILLED' : '✗ EMPTY');
     console.log('  StoreName Value:', JSON.stringify(storeName), storeName ? '✓ FILLED' : '✗ EMPTY');
     console.log('  Amount Value:', amount, amount > 0 ? `✓ VALID (${amount})` : `✗ INVALID (must be > 0, got ${amount})`);
     console.log('  Category Value:', JSON.stringify(category), category ? '✓ FILLED' : '✗ EMPTY');
+    if (isManualEntry) {
+        console.log('  Entry Date:', entryDate ? `✓ FILLED (${entryDate})` : '✗ EMPTY');
+    }
     if (requestType === 'Direct Pay') {
         console.log('  Direct Pay Check:', vendorMissingSearchTerm ? '✗ VENDOR MISSING SEARCH TERM' : '✓ Vendor has search term');
     }
     console.log('  Form Fields Valid:', isFormValid);
-    console.log('  Required Files for', JSON.stringify(category), ':', requiredFilesLower);
-    console.log('  Uploaded Files:', Object.keys(selectedFiles).length > 0 ? selectedFiles : '(none)');
-    console.log('  All Required Files Uploaded:', allFilesUploaded);
+    if (!isManualEntry && category) {
+        const categoryConfig = getCategoryConfig();
+        const requiredFiles = categoryConfig[category]?.required_fields || [];
+        const requiredFilesLower = requiredFiles.map(f => f.toLowerCase());
+        console.log('  Required Files for', JSON.stringify(category), ':', requiredFilesLower);
+        console.log('  Uploaded Files:', Object.keys(selectedFiles).length > 0 ? selectedFiles : '(none)');
+        console.log('  All Required Files Uploaded:', allFilesUploaded);
+    }
     console.log('  Overall Valid:', isValid);
     console.log('  Button Disabled:', !isValid, '(will be enabled when all conditions met)');
 
@@ -252,20 +269,37 @@ function validateForm() {
  */
 function toggleManualEntry(isManual) {
     const fileUploadCard = document.getElementById('fileUploadCard');
+    const invoiceGenerationCard = document.getElementById('invoiceGenerationCard');
+    const manualEntryDateField = document.getElementById('manualEntryDateField');
     const submitBtnText = document.getElementById('submitBtnText');
 
-    if (isManual) {
-        // Hide file upload section
-        fileUploadCard.style.display = 'none';
-        // Change button text
-        submitBtnText.textContent = 'Log Transaction';
-        // Clear any selected files
-        selectedFiles = {};
-    } else {
-        // Show file upload section
-        fileUploadCard.style.display = 'block';
-        // Change button text back
-        submitBtnText.textContent = 'Review & Submit';
+    if (fileUploadCard && invoiceGenerationCard && manualEntryDateField && submitBtnText) {
+        if (isManual) {
+            // Hide file upload section
+            fileUploadCard.style.display = 'none';
+            // Hide invoice generation section
+            invoiceGenerationCard.style.display = 'none';
+            // Show date field for manual entry
+            manualEntryDateField.style.display = 'block';
+            // Change button text
+            submitBtnText.textContent = 'Log Transaction';
+            // Clear any selected files
+            selectedFiles = {};
+            // Uncheck invoice generation if checked
+            const generateInvoiceCheckbox = document.getElementById('generateInvoice');
+            if (generateInvoiceCheckbox) {
+                generateInvoiceCheckbox.checked = false;
+            }
+        } else {
+            // Show file upload section
+            fileUploadCard.style.display = 'block';
+            // Show invoice generation section
+            invoiceGenerationCard.style.display = 'block';
+            // Hide date field
+            manualEntryDateField.style.display = 'none';
+            // Change button text back
+            submitBtnText.textContent = 'Review & Submit';
+        }
     }
 
     // Re-validate the form
@@ -301,6 +335,13 @@ function initializeForm() {
     // Store name and amount validation on input
     document.getElementById('storeName').addEventListener('input', validateForm);
     document.getElementById('amount').addEventListener('input', validateForm);
+
+    // Entry date validation for manual entries
+    const entryDateElement = document.getElementById('entryDate');
+    if (entryDateElement) {
+        entryDateElement.addEventListener('change', validateForm);
+        entryDateElement.addEventListener('input', validateForm);
+    }
 
     // Clear the default "0" when user focuses on amount field
     const amountField = document.getElementById('amount');
@@ -477,14 +518,22 @@ async function checkCredentials() {
         const response = await fetch('/api/config/credentials');
         const data = await response.json();
         console.log('Credentials check response:', data);
+        const credentialsAlert = document.getElementById('credentialsAlert');
+
         if (data.configured) {
-            document.getElementById('credentialsAlert').style.display = 'none';
+            credentialsAlert.style.display = 'none';
             console.log('✓ Credentials are configured - hiding alert');
         } else {
+            credentialsAlert.style.display = 'block';
+            credentialsAlert.classList.add('show');
             console.log('✗ Credentials NOT configured - showing alert');
         }
     } catch (error) {
         console.error('Error checking credentials:', error);
+        // Show alert if there's an error checking credentials
+        const credentialsAlert = document.getElementById('credentialsAlert');
+        credentialsAlert.style.display = 'block';
+        credentialsAlert.classList.add('show');
     }
 }
 
@@ -1218,9 +1267,13 @@ async function confirmSubmit() {
         comment: comment
     };
 
-    // For manual entries, add source flag
+    // For manual entries, add source flag and entry date
     if (isManualEntry) {
         submitData.source = 'manual';
+        const entryDateElement = document.getElementById('entryDate');
+        if (entryDateElement) {
+            submitData.entry_date = entryDateElement.value;
+        }
     } else {
         submitData.files = selectedFiles;
     }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESA Helper - ClassWallet Automation</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
@@ -31,7 +32,7 @@
 
     <div class="container mt-4">
         <!-- Credentials Alert -->
-        <div id="credentialsAlert" class="alert alert-warning alert-dismissible fade show" role="alert">
+        <div id="credentialsAlert" class="alert alert-warning alert-dismissible fade" role="alert" style="display: none;">
             <strong>Setup Required:</strong> Please configure your ClassWallet credentials.
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             <button type="button" class="btn btn-sm btn-primary ms-2" data-bs-toggle="modal" data-bs-target="#credentialsModal">
@@ -193,8 +194,31 @@
                         </div>
                     </div>
 
+                    <!-- Manual Entry Toggle -->
+                    <div class="card mb-4 border-info">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">Entry Type</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="manualEntryToggle" name="manual_entry">
+                                <label class="form-check-label" for="manualEntryToggle">
+                                    <strong>Manual Entry</strong> - Log a transaction without automation
+                                </label>
+                            </div>
+                            <small class="form-text text-muted d-block mb-3">
+                                Use this for transactions you've already completed or want to backfill. No documents required. The transaction will be logged for reporting and budget tracking.
+                            </small>
+                            <div id="manualEntryDateField" style="display: none;">
+                                <label for="entryDate" class="form-label">Transaction Date <span class="text-danger">*</span></label>
+                                <input type="date" class="form-control" id="entryDate" name="entry_date">
+                                <small class="form-text text-muted">When did this transaction occur?</small>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Invoice Generation (Optional) -->
-                    <div class="card mb-4">
+                    <div class="card mb-4" id="invoiceGenerationCard">
                         <div class="card-header">
                             <h5>Invoice Generation <span class="badge bg-info">Optional</span></h5>
                         </div>
@@ -298,24 +322,6 @@
                                 </button>
                                 <div id="invoiceStatus" style="display: none; margin-top: 15px;" class="alert alert-info"></div>
                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Manual Entry Toggle -->
-                    <div class="card mb-4 border-info">
-                        <div class="card-header bg-light">
-                            <h5 class="mb-0">Entry Type</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input" type="checkbox" id="manualEntryToggle" name="manual_entry">
-                                <label class="form-check-label" for="manualEntryToggle">
-                                    <strong>Manual Entry</strong> - Log a transaction without automation
-                                </label>
-                            </div>
-                            <small class="form-text text-muted d-block mt-2">
-                                Use this for transactions you've already completed or want to backfill. No documents required. The transaction will be logged for reporting and budget tracking.
-                            </small>
                         </div>
                     </div>
 
