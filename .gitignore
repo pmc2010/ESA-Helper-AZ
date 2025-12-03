@@ -8,6 +8,7 @@ data/students.json
 data/vendors.json
 data/esa_templates/
 data/curriculum_templates/
+data/invoices/
 
 # Temporary files
 data/temp_uploads/
