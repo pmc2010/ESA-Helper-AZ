@@ -1,0 +1,44 @@
+{# Shared Tools Dropdown Component
+   Include this in your navbar for data management tools
+   Usage: {% include '_tools_dropdown.html' %}
+   The current_page variable should be set in the template or passed from the route
+#}
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="toolsDropdown" role="button" data-bs-toggle="dropdown">
+        Tools
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="toolsDropdown">
+        {# Data Management #}
+        {% if current_page != 'manage_students' %}
+            <li><a class="dropdown-item" href="/manage-students">Manage Students</a></li>
+        {% endif %}
+
+        {% if current_page != 'manage_vendors' %}
+            <li><a class="dropdown-item" href="/manage-vendors">Manage Vendors</a></li>
+        {% endif %}
+
+        {% if current_page != 'manage_templates' %}
+            <li><a class="dropdown-item" href="/manage-templates">Manage Templates</a></li>
+        {% endif %}
+
+        {% if current_page != 'manage_curriculum_templates' %}
+            <li><a class="dropdown-item" href="/manage-curriculum-templates">Manage Curriculum Templates</a></li>
+        {% endif %}
+
+        {% if current_page != 'manage_temp_files' %}
+            <li><a class="dropdown-item" href="/manage-temp-files">Manage Temporary Files</a></li>
+        {% endif %}
+
+        <li><hr class="dropdown-divider"></li>
+
+        {# Utilities #}
+        {% if current_page != 'curriculum_generator' %}
+            <li><a class="dropdown-item" href="/curriculum-generator">Curriculum Generator</a></li>
+        {% endif %}
+
+        {% if current_page != 'data_migration' %}
+            <li><a class="dropdown-item" href="/data-migration">Data Backup & Migration</a></li>
+        {% endif %}
+    </ul>
+</li>

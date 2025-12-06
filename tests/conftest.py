@@ -4,6 +4,7 @@ import pytest
 import json
 import tempfile
 from pathlib import Path
+from unittest.mock import patch
 from app import create_app
 from app.utils import delete_all_submissions
 
@@ -17,13 +18,83 @@ def app():
     # Use temporary directory for test data
     with tempfile.TemporaryDirectory() as tmpdir:
         app.config['DATA_DIR'] = tmpdir
+
+        # Create students.json with test data
+        data_dir = Path(tmpdir)
+        students_file = data_dir / 'students.json'
+        students_data = {
+            'students': [
+                {
+                    'id': 'test_student_a',
+                    'name': 'Test Student A',
+                    'folder': str(data_dir / 'test_student_a'),
+                    'allotment': 7500.00
+                },
+                {
+                    'id': 'test_student_b',
+                    'name': 'Test Student B',
+                    'folder': str(data_dir / 'test_student_b'),
+                    'allotment': 7500.00
+                },
+                {
+                    'id': 'test_student_c',
+                    'name': 'Test Student C',
+                    'folder': str(data_dir / 'test_student_c'),
+                    'allotment': 7500.00
+                }
+            ]
+        }
+        students_file.write_text(json.dumps(students_data, indent=2))
+
+        # Create vendors.json with test data
+        vendors_file = data_dir / 'vendors.json'
+        vendors_data = {
+            'vendors': [
+                {
+                    'id': 'test_vendor_1',
+                    'name': 'Test Vendor LLC',
+                    'classwallet_search_term': 'Test Vendor LLC',
+                    'tax_rate': 0.0
+                }
+            ]
+        }
+        vendors_file.write_text(json.dumps(vendors_data, indent=2))
+
         yield app
 
 
 @pytest.fixture
 def client(app):
-    """Create test client"""
-    return app.test_client()
+    """Create test client with mocked student/vendor loading"""
+    # Mock the student loading in invoice_generator AND routes to return test data
+    test_students = [
+        {
+            'id': 'test_student_a',
+            'name': 'Test Student A',
+            'folder': '/tmp/test_student_a',
+            'allotment': 7500.00,
+            'esa_allotments': []
+        },
+        {
+            'id': 'test_student_b',
+            'name': 'Test Student B',
+            'folder': '/tmp/test_student_b',
+            'allotment': 7500.00,
+            'esa_allotments': []
+        },
+        {
+            'id': 'test_student_c',
+            'name': 'Test Student C',
+            'folder': '/tmp/test_student_c',
+            'allotment': 7500.00,
+            'esa_allotments': []
+        }
+    ]
+
+    # Patch both locations where load_student_profiles is imported
+    with patch('app.invoice_generator.load_student_profiles', return_value=test_students), \
+         patch('app.routes.load_student_profiles', return_value=test_students):
+        yield app.test_client()
 
 
 @pytest.fixture

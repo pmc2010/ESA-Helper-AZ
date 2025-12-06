@@ -565,7 +565,15 @@ async function updateAvailableTemplates() {
         if (studentTemplates.length > 0) {
             const optgroup = document.createElement('optgroup');
             optgroup.label = `${studentName}'s Templates`;
-            studentTemplates.forEach(template => {
+
+            // Sort templates alphabetically by name
+            const sortedTemplates = studentTemplates.sort((a, b) => {
+                const nameA = (a.name || a.id).toLowerCase();
+                const nameB = (b.name || b.id).toLowerCase();
+                return nameA.localeCompare(nameB);
+            });
+
+            sortedTemplates.forEach(template => {
                 const option = document.createElement('option');
                 option.value = template.id;
                 option.textContent = template.name || template.id;

@@ -1,0 +1,20 @@
+{# Shared Reports Dropdown Component
+   Include this in your navbar for analytics and history
+   Usage: {% include '_reports_dropdown.html' %}
+   The current_page variable should be set in the template or passed from the route
+#}
+
+<li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle" href="#" id="reportsDropdown" role="button" data-bs-toggle="dropdown">
+        Reports
+    </a>
+    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="reportsDropdown">
+        {% if current_page != 'submission_history' %}
+            <li><a class="dropdown-item" href="/submission-history">Submission History</a></li>
+        {% endif %}
+
+        {% if current_page != 'reports' %}
+            <li><a class="dropdown-item" href="/reports">Budget & Analytics</a></li>
+        {% endif %}
+    </ul>
+</li>
