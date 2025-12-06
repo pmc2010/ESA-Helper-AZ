@@ -6,6 +6,10 @@ from datetime import datetime
 from unittest.mock import patch, MagicMock
 from app.utils import get_submission_history, log_submission
 
+# Get current month for tests (analytics uses logged timestamp, not entry_date)
+CURRENT_MONTH = datetime.now().strftime('%Y-%m')
+CURRENT_MONTH_NAME = datetime.now().strftime('%B %Y')
+
 
 class TestReportsAnalytics:
     """Test reports and analytics endpoints"""
@@ -22,11 +26,11 @@ class TestReportsAnalytics:
 
     def test_analytics_with_specific_month(self, client):
         """Test analytics for a specific month"""
-        response = client.get('/api/reports/analytics?month=2025-11')
+        response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert response.status_code == 200
         data = json.loads(response.data)
-        assert 'November 2025' in data['month']
+        assert CURRENT_MONTH_NAME in data['month']
 
     def test_analytics_invalid_month_format(self, client):
         """Test analytics with invalid month format"""
@@ -58,7 +62,7 @@ class TestManualSubmissionsInReports:
         assert response.status_code == 201
 
         # Get analytics for November 2025
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)
@@ -88,7 +92,7 @@ class TestManualSubmissionsInReports:
         assert response.status_code == 201
 
         # Get analytics for November 2025
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)
@@ -118,7 +122,7 @@ class TestManualSubmissionsInReports:
         assert response.status_code == 201
 
         # Get analytics for November 2025
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)
@@ -161,7 +165,7 @@ class TestManualSubmissionsInReports:
             assert response.status_code == 201
 
         # Get analytics for November 2025
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)
@@ -203,7 +207,7 @@ class TestManualSubmissionsInReports:
         log_submission(automated_data, created_by='automation')
 
         # Get analytics for November 2025
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)
@@ -278,7 +282,7 @@ class TestReportsBudgetCalculations:
         assert response.status_code == 201
 
         # Get analytics
-        analytics_response = client.get('/api/reports/analytics?month=2025-11')
+        analytics_response = client.get(f'/api/reports/analytics?month={CURRENT_MONTH}')
 
         assert analytics_response.status_code == 200
         data = json.loads(analytics_response.data)

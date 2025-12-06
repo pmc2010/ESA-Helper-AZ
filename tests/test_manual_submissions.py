@@ -309,7 +309,7 @@ class TestManualSubmissionLogging:
         entry = next((e for e in history if e.get('po_number') == 'PO-2025-202'), None)
 
         assert entry is not None
-        assert entry['vendor_name'] == 'Hayden Acres'
+        assert entry['vendor_name'] == 'Test Vendor LLC'
         assert entry['request_type'] == 'Direct Pay'
 
 
