@@ -10,6 +10,56 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Key file to start with**: `main.py` → `app/automation.py` → `app/classwallet.py` (shows the workflow in order).
 
+## ⚠️ CRITICAL: Public Repository - Privacy Protection
+
+**THIS IS A PUBLIC GITHUB REPOSITORY.** All commits and files are publicly visible.
+
+### Privacy Rules (MUST FOLLOW)
+
+**NEVER create, commit, or modify files containing:**
+- Real student names, family member names, or personal identities
+- Actual vendor names, business names, or contact information
+- Real addresses, phone numbers, or email addresses
+- Actual ClassWallet credentials, API keys, or passwords
+- Real financial data, account numbers, or transaction IDs
+- Screenshots or documents containing personal information
+- Any other personally identifiable information (PII)
+
+### Safe Practices
+
+**When creating test files:**
+- Use generic names: "Test Student A", "Test Student B", "Test Vendor LLC"
+- Use placeholder data: "123 Test St", "test@example.com", "555-1234"
+- Use fictional amounts and dates
+- Never reference real people or businesses
+
+**When writing documentation:**
+- Use examples with fictional data only
+- Redact any real information before committing
+- Avoid specific implementation details that reveal personal use patterns
+
+**Files already git-ignored (safe for personal data):**
+- `config.json` - ClassWallet credentials
+- `data/students.json` - Student profiles
+- `data/vendors.json` - Vendor profiles
+- `data/esa_templates/` - Template data
+- `logs/` - Submission history
+
+**If personal information was accidentally committed:**
+1. Do NOT just delete it in a new commit (it remains in git history)
+2. Follow the GitHub guide to remove sensitive data from history
+3. Force-push to overwrite the repository history
+4. Rotate any exposed credentials immediately
+
+### Code Review Checklist
+
+Before committing ANY file, verify:
+- [ ] No real names appear in code, tests, or documentation
+- [ ] No real contact information (email, phone, address)
+- [ ] No credentials or API keys (even expired ones)
+- [ ] Sample data uses only generic/fictional information
+- [ ] Screenshots or images contain no PII
+
 ## Common Commands
 
 ### Running the Application
