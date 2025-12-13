@@ -152,10 +152,11 @@ def cleanup_test_submissions():
             submissions = data.get('submissions', [])
             original_count = len(submissions)
 
-            # Remove sample student submissions
+            # Remove sample student submissions (including Test Student A, B, C)
             cleaned = [
                 s for s in submissions
-                if s.get('student', '') not in ['Student A', 'Student B', 'Student C']
+                if not (s.get('student', '').startswith('Test Student') or
+                        s.get('student', '') in ['Student A', 'Student B', 'Student C'])
             ]
 
             if len(cleaned) < original_count:
@@ -181,11 +182,12 @@ def cleanup_test_submissions():
                 students = data.get('students', [])
                 original_count = len(students)
 
-                # Remove test students (new_student, Student A/B/C, etc.)
+                # Remove test students (new_student, Student A/B/C, Test Student A/B/C, etc.)
                 cleaned = [
                     s for s in students
-                    if s.get('id', '') not in ['new_student', 'student_a', 'student_b', 'student_c']
-                    and s.get('name', '') not in ['Student A', 'Student B', 'Student C', 'New Student']
+                    if s.get('id', '') not in ['new_student', 'student_a', 'student_b', 'student_c', 'test_student_a', 'test_student_b', 'test_student_c']
+                    and not (s.get('name', '').startswith('Test Student') or
+                             s.get('name', '') in ['Student A', 'Student B', 'Student C', 'New Student'])
                 ]
 
                 if len(cleaned) < original_count:
@@ -200,7 +202,9 @@ def cleanup_test_submissions():
         templates_dir = data_dir / 'esa_templates'
         if templates_dir.exists():
             for template_file in templates_dir.glob('*.json'):
-                if template_file.name in ['student_a.json', 'student_b.json', 'student_c.json', 'new_student.json']:
+                if template_file.name in ['student_a.json', 'student_b.json', 'student_c.json',
+                                          'test_student_a.json', 'test_student_b.json', 'test_student_c.json',
+                                          'new_student.json']:
                     try:
                         template_file.unlink()
                         print(f"   Deleted test template: {template_file.name}")
