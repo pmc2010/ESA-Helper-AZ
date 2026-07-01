@@ -166,14 +166,14 @@ def index():
         'Curriculum': {
             'required_fields': ['Receipt']
         },
+        'Supplemental Materials (Curriculum Always Required)': {
+            'required_fields': ['Curriculum', 'Receipt']
+        },
         'Tutoring & Teaching Services - Accredited Facility/Business': {
             'required_fields': ['Receipt', 'Invoice']
         },
         'Tutoring & Teaching Services - Accredited Individual': {
             'required_fields': ['Receipt', 'Invoice', 'Attestation']
-        },
-        'Supplemental Materials (Curriculum Always Required)': {
-            'required_fields': ['Curriculum', 'Receipt']
         },
         'Uniforms': {
             'required_fields': ['Receipt']
@@ -188,14 +188,14 @@ def index():
         'Curriculum': {
             'required_fields': ['Invoice']
         },
+        'Supplemental Materials (Curriculum Always Required)': {
+            'required_fields': ['Invoice', 'Curriculum']
+        },
         'Tutoring & Teaching Services - Accredited Facility/Business': {
             'required_fields': ['Invoice']
         },
         'Tutoring & Teaching Services - Accredited Individual': {
             'required_fields': ['Invoice']
-        },
-        'Supplemental Materials (Curriculum Always Required)': {
-            'required_fields': ['Invoice', 'Curriculum']
         },
         'Uniforms': {
             'required_fields': ['Invoice']
