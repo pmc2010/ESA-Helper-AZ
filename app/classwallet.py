@@ -687,6 +687,12 @@ class ClassWalletAutomation:
             # Step 2: Select expense category
             logger.info(f"2. Selecting expense category: {category}...")
 
+            # Map short display names to full ClassWallet category strings (data-test / aria-label values)
+            CATEGORY_DISPLAY_MAP = {
+                'Uniforms': 'Uniforms purchased from or through a qualified school',
+            }
+            category = CATEGORY_DISPLAY_MAP.get(category, category)
+
             # Note: Category names from the form may differ from ClassWallet's exact format:
             # Form sends: "Computer Hardware & Technological Devices"
             # ClassWallet has: "Computer hardware and technological devices"

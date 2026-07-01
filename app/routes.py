@@ -40,21 +40,21 @@ def requirements():
 @main_bp.route('/manage-students')
 def manage_students():
     """Render student management page"""
-    students = load_student_profiles()
+    students = sorted(load_student_profiles(), key=lambda s: s.get('name', '').split()[0].lower())
     return render_template('manage-students.html', students=students, current_page='manage_students')
 
 
 @main_bp.route('/manage-vendors')
 def manage_vendors():
     """Render vendor management page"""
-    vendors = load_vendor_profiles()
+    vendors = sorted(load_vendor_profiles(), key=lambda v: v.get('name', '').lower())
     return render_template('manage-vendors.html', vendors=vendors, current_page='manage_vendors')
 
 
 @main_bp.route('/manage-templates')
 def manage_templates():
     """Render template management page"""
-    students = load_student_profiles()
+    students = sorted(load_student_profiles(), key=lambda s: s.get('name', '').split()[0].lower())
     return render_template('manage-templates.html', students=students, current_page='manage_templates')
 
 
@@ -174,6 +174,9 @@ def index():
         },
         'Supplemental Materials (Curriculum Always Required)': {
             'required_fields': ['Curriculum', 'Receipt']
+        },
+        'Uniforms': {
+            'required_fields': ['Receipt']
         }
     }
 
@@ -193,6 +196,9 @@ def index():
         },
         'Supplemental Materials (Curriculum Always Required)': {
             'required_fields': ['Invoice', 'Curriculum']
+        },
+        'Uniforms': {
+            'required_fields': ['Invoice']
         }
     }
 

@@ -106,7 +106,10 @@
                 <div class="card mb-4 border-primary border-start border-5">
                     <div class="card-header bg-light d-flex justify-content-between align-items-center">
                         <h3 class="mb-0">Submission History</h3>
-                        <div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-success" id="downloadCsvBtn">
+                                Download Spreadsheet
+                            </button>
                             <button type="button" class="btn btn-sm btn-outline-danger" id="deleteAllBtn" style="display: none;">
                                 Delete All
                             </button>
@@ -209,6 +212,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             loadSubmissionHistory();
             setupFilterListeners();
+            document.getElementById('downloadCsvBtn').addEventListener('click', downloadCsv);
         });
 
         function setupFilterListeners() {
@@ -312,9 +316,10 @@
                                 </div>
                             </div>
                             <div class="row mt-2">
-                                <div class="col-12">
+                                <div class="col-md-6">
                                     <small class="text-muted">PO: ${submission.po_number || 'N/A'}</small>
                                 </div>
+                                ${submission.comment ? `<div class="col-md-6 text-end"><small class="text-muted"><strong>Comment:</strong> ${submission.comment}</small></div>` : ''}
                             </div>
                         </div>
                     </div>
@@ -523,6 +528,61 @@
                 console.error('Error:', error);
                 alert('Error deleting submissions: ' + error.message);
             });
+        }
+        function downloadCsv() {
+            fetch('/api/submission-history?limit=all')
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.success || !data.submissions || data.submissions.length === 0) {
+                        alert('No submissions to download.');
+                        return;
+                    }
+                    const headers = [
+                        'student_name', 'vendor_name', 'submission_date',
+                        'request_type', 'submission_type', 'category',
+                        'po_number', 'comment', 'amount'
+                    ];
+                    const rows = data.submissions.map(s => {
+                        const date = s.logged_at ? new Date(s.logged_at).toLocaleString() : '';
+                        const requestType = s.type === 'direct_pay' ? 'Direct Pay' : 'Reimbursement';
+                        const vendorName = s.store_name || s.vendor_name || '';
+                        const submissionType = s.submission_type || '';
+                        const category = s.expense_category || s.category || '';
+                        return [
+                            csvEscape(s.student || ''),
+                            csvEscape(vendorName),
+                            csvEscape(date),
+                            csvEscape(requestType),
+                            csvEscape(submissionType),
+                            csvEscape(category),
+                            csvEscape(s.po_number || ''),
+                            csvEscape(s.comment || ''),
+                            s.amount || '0'
+                        ];
+                    });
+                    const csvContent = [headers, ...rows]
+                        .map(row => row.join(','))
+                        .join('\n');
+                    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `esa_submissions_${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                })
+                .catch(error => {
+                    console.error('Error downloading CSV:', error);
+                    alert('Error downloading spreadsheet: ' + error.message);
+                });
+        }
+
+        function csvEscape(value) {
+            const str = String(value);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                return '"' + str.replace(/"/g, '""') + '"';
+            }
+            return str;
         }
     </script>
 </body>

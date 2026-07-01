@@ -175,8 +175,9 @@ class SubmissionOrchestrator:
                 'store_name': store_name,
                 'amount': amount,
                 'po_number': po_number,
-                'expense_category': submission_data.get('category'),
-                'comment': submission_data.get('comment')
+                'expense_category': submission_data.get('expense_category'),
+                'comment': submission_data.get('comment'),
+                'submission_type': 'automated' if auto_submit else 'manual'
             })
 
             logger.info("Reimbursement workflow completed successfully")
@@ -269,8 +270,9 @@ class SubmissionOrchestrator:
                 'vendor_name': vendor_name,
                 'amount': amount,
                 'po_number': po_number,
-                'expense_category': submission_data.get('category'),
-                'comment': submission_data.get('comment')
+                'expense_category': submission_data.get('expense_category'),
+                'comment': submission_data.get('comment'),
+                'submission_type': 'automated' if auto_submit else 'manual'
             })
 
             logger.info("Direct pay workflow completed successfully")
