@@ -16,6 +16,7 @@ def create_app():
         static_folder=os.path.join(basedir, 'static')
     )
     app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file upload
+    app.config['TEMPLATES_AUTO_RELOAD'] = True  # pick up template edits without a server restart
 
     # Initialize required directories for new users
     _initialize_directories(basedir)

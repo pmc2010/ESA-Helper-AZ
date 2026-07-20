@@ -10,6 +10,7 @@ from PyPDF2 import PdfReader, PdfWriter
 logger = logging.getLogger(__name__)
 
 DATA_DIR = Path(__file__).parent.parent / 'data'
+LOGS_DIR = Path(__file__).parent.parent / 'logs'
 
 
 def load_config():
@@ -195,7 +196,7 @@ def log_submission(submission_data, created_by='production'):
         submission_data: Dictionary with submission details
         created_by: Source of submission - 'production', 'test', or other identifier
     """
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = LOGS_DIR
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # Create timestamped log file
@@ -223,7 +224,7 @@ def _update_submission_history(submission_data):
     Args:
         submission_data: Dictionary with submission details to add to history
     """
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = LOGS_DIR
     history_file = log_dir / 'submission_history.json'
 
     try:
@@ -256,7 +257,7 @@ def get_submission_history():
     Returns:
         List of submission dictionaries, sorted by date (newest first)
     """
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = LOGS_DIR
     history_file = log_dir / 'submission_history.json'
 
     if not history_file.exists():
@@ -284,7 +285,7 @@ def delete_submission(timestamp):
     Returns:
         bool: True if successful, False otherwise
     """
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = LOGS_DIR
     history_file = log_dir / 'submission_history.json'
     submission_file = log_dir / f'submission_{timestamp}.json'
 
@@ -334,7 +335,7 @@ def delete_all_submissions(created_by_filter=None):
     Returns:
         dict: {'success': bool, 'deleted_count': int, 'message': str}
     """
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = LOGS_DIR
     history_file = log_dir / 'submission_history.json'
 
     try:

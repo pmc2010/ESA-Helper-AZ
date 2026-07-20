@@ -703,6 +703,9 @@ class ClassWalletAutomation:
             if category.startswith("Computer Hardware"):
                 # Computer Hardware category: all words after "Computer" are lowercase
                 category_normalized = "Computer hardware and technological devices"
+            elif category == "School Tuition":
+                # Form label "School Tuition" maps to ClassWallet's full category text
+                category_normalized = "Tuition, textbooks or fees at a qualified school"
             elif "Tutoring" in category and "Teaching" in category:
                 # Tutoring categories: replace & with "and", but keep Services capitalized
                 category_normalized = category.replace(" & ", " and ").replace("&", "and")

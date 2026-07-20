@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+from app import utils
 from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions
 from app.invoice_generator import (
     InvoiceGenerator, load_vendor_profiles, load_student_profiles,
@@ -22,6 +23,52 @@ api_bp = Blueprint('api', __name__)
 # Constants
 DATA_DIR = Path(__file__).parent.parent / 'data'
 CONFIG_FILE = Path(__file__).parent.parent / 'config.json'
+
+# Expense category configuration - single source of truth for all category dropdowns
+# and file-requirement logic (Reimbursement vs Direct Pay), shared by the main
+# submission form and the template management page.
+EXPENSE_CATEGORIES = {
+    'Computer Hardware & Technological Devices': {
+        'required_fields': ['Receipt']
+    },
+    'Curriculum': {
+        'required_fields': ['Receipt']
+    },
+    'Tutoring & Teaching Services - Accredited Facility/Business': {
+        'required_fields': ['Receipt', 'Invoice']
+    },
+    'Tutoring & Teaching Services - Accredited Individual': {
+        'required_fields': ['Receipt', 'Invoice', 'Attestation']
+    },
+    'Supplemental Materials (Curriculum Always Required)': {
+        'required_fields': ['Curriculum', 'Receipt']
+    },
+    'School Tuition': {
+        'required_fields': ['Invoice']
+    }
+}
+
+# File requirements for Direct Pay submissions
+DIRECT_PAY_CATEGORIES = {
+    'Computer Hardware & Technological Devices': {
+        'required_fields': ['Invoice']
+    },
+    'Curriculum': {
+        'required_fields': ['Invoice']
+    },
+    'Tutoring & Teaching Services - Accredited Facility/Business': {
+        'required_fields': ['Invoice']
+    },
+    'Tutoring & Teaching Services - Accredited Individual': {
+        'required_fields': ['Invoice']
+    },
+    'Supplemental Materials (Curriculum Always Required)': {
+        'required_fields': ['Invoice', 'Curriculum']
+    },
+    'School Tuition': {
+        'required_fields': ['Invoice']
+    }
+}
 
 
 @main_bp.route('/setup')
@@ -40,14 +87,14 @@ def requirements():
 @main_bp.route('/manage-students')
 def manage_students():
     """Render student management page"""
-    students = load_student_profiles()
+    students = sorted(load_student_profiles(), key=lambda s: s.get('name', '').lower())
     return render_template('manage-students.html', students=students, current_page='manage_students')
 
 
 @main_bp.route('/manage-vendors')
 def manage_vendors():
     """Render vendor management page"""
-    vendors = load_vendor_profiles()
+    vendors = sorted(load_vendor_profiles(), key=lambda v: v.get('name', '').lower())
     return render_template('manage-vendors.html', vendors=vendors, current_page='manage_vendors')
 
 
@@ -55,7 +102,13 @@ def manage_vendors():
 def manage_templates():
     """Render template management page"""
     students = load_student_profiles()
-    return render_template('manage-templates.html', students=students, current_page='manage_templates')
+    return render_template(
+        'manage-templates.html',
+        students=students,
+        expense_categories=EXPENSE_CATEGORIES,
+        direct_pay_categories=DIRECT_PAY_CATEGORIES,
+        current_page='manage_templates'
+    )
 
 
 @main_bp.route('/manage-temp-files')
@@ -159,50 +212,13 @@ def index():
         ]  # Fallback
         logger.error(f"Error loading students: {str(e)}")
 
-    expense_categories = {
-        'Computer Hardware & Technological Devices': {
-            'required_fields': ['Receipt']
-        },
-        'Curriculum': {
-            'required_fields': ['Receipt']
-        },
-        'Tutoring & Teaching Services - Accredited Facility/Business': {
-            'required_fields': ['Receipt', 'Invoice']
-        },
-        'Tutoring & Teaching Services - Accredited Individual': {
-            'required_fields': ['Receipt', 'Invoice', 'Attestation']
-        },
-        'Supplemental Materials (Curriculum Always Required)': {
-            'required_fields': ['Curriculum', 'Receipt']
-        }
-    }
-
-    # File requirements for Direct Pay submissions
-    direct_pay_categories = {
-        'Computer Hardware & Technological Devices': {
-            'required_fields': ['Invoice']
-        },
-        'Curriculum': {
-            'required_fields': ['Invoice']
-        },
-        'Tutoring & Teaching Services - Accredited Facility/Business': {
-            'required_fields': ['Invoice']
-        },
-        'Tutoring & Teaching Services - Accredited Individual': {
-            'required_fields': ['Invoice']
-        },
-        'Supplemental Materials (Curriculum Always Required)': {
-            'required_fields': ['Invoice', 'Curriculum']
-        }
-    }
-
     return render_template(
         'index.html',
         students=students,
         templates=templates,
         vendors=vendors,
-        expense_categories=expense_categories,
-        direct_pay_categories=direct_pay_categories,
+        expense_categories=EXPENSE_CATEGORIES,
+        direct_pay_categories=DIRECT_PAY_CATEGORIES,
         current_page='index'
     )
 
@@ -962,7 +978,7 @@ def submit_reimbursement():
         submission_log['vendor_name'] = data.get('vendor_name')
         submission_log['classwallet_search_term'] = data.get('classwallet_search_term')
 
-    log_dir = Path(__file__).parent.parent / 'logs'
+    log_dir = utils.LOGS_DIR
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / f"submission_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
@@ -1069,7 +1085,7 @@ def update_manual_submission(po_number):
             submission['comment'] = data.get('comment')
 
         # Update master history file
-        log_dir = Path(__file__).parent.parent / 'logs'
+        log_dir = utils.LOGS_DIR
         history_file = log_dir / 'submission_history.json'
 
         with open(history_file, 'r') as f:
@@ -1447,7 +1463,7 @@ def import_data():
 
         # Import submission history
         if 'submission_history' in import_categories and 'submission_history' in data and data['submission_history']:
-            history_file = Path(__file__).parent.parent / 'logs' / 'submission_history.json'
+            history_file = utils.LOGS_DIR / 'submission_history.json'
             history_file.parent.mkdir(parents=True, exist_ok=True)
 
             # Handle both old format (flat list) and new format (dict with submissions key)
@@ -1570,7 +1586,7 @@ def reset_data():
             logger.warning(f"Could not reset curriculum templates: {str(e)}")
 
         # Reset submission history and all log files
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
         try:
             if logs_dir.exists():
                 for log_file in logs_dir.glob('*'):
@@ -1605,7 +1621,7 @@ def reset_data():
 def get_logs():
     """Get list of all automation log files with metadata"""
     try:
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
         if not logs_dir.exists():
             return jsonify([])
 
@@ -1642,7 +1658,7 @@ def download_log(log_name):
         if '..' in log_name or '/' in log_name:
             return jsonify({'error': 'Invalid log file name'}), 400
 
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
         log_file = logs_dir / log_name
 
         if not log_file.exists():
@@ -1673,7 +1689,7 @@ def delete_log(log_name):
         if '..' in log_name or '/' in log_name:
             return jsonify({'error': 'Invalid log file name'}), 400
 
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
         log_file = logs_dir / log_name
 
         if not log_file.exists():
@@ -1692,7 +1708,7 @@ def delete_old_logs():
     """Delete log files older than specified days"""
     try:
         days = request.args.get('days', 7, type=int)
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
 
         if not logs_dir.exists():
             return jsonify({'deleted': 0})
@@ -1745,7 +1761,7 @@ def email_log():
         if '..' in log_name or '/' in log_name:
             return jsonify({'error': 'Invalid log file name'}), 400
 
-        logs_dir = Path(__file__).parent.parent / 'logs'
+        logs_dir = utils.LOGS_DIR
         log_file = logs_dir / log_name
 
         if not log_file.exists():
