@@ -6,7 +6,20 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 from app import create_app
+from app import utils as app_utils
 from app.utils import delete_all_submissions
+
+
+@pytest.fixture(autouse=True)
+def isolate_logs_dir(tmp_path, monkeypatch):
+    """Redirect all submission/log writes to a throwaway directory.
+
+    log_submission() and friends in app/utils.py write to a hardcoded
+    LOGS_DIR, bypassing Flask's app.config test overrides. Without this,
+    tests write real "Test Student A/B/C" entries into the project's
+    logs/submission_history.json.
+    """
+    monkeypatch.setattr(app_utils, 'LOGS_DIR', tmp_path / 'logs')
 
 
 @pytest.fixture
@@ -264,6 +277,9 @@ def expense_categories():
         },
         'Supplemental Materials (Curriculum Always Required)': {
             'required_fields': ['Curriculum', 'Receipt']
+        },
+        'School Tuition': {
+            'required_fields': ['Invoice']
         }
     }
 
@@ -286,5 +302,8 @@ def direct_pay_categories():
         },
         'Supplemental Materials (Curriculum Always Required)': {
             'required_fields': ['Invoice', 'Curriculum']
+        },
+        'School Tuition': {
+            'required_fields': ['Invoice']
         }
     }

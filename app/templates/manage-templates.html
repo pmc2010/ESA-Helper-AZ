@@ -168,7 +168,7 @@
                                         Amount ($) <span class="text-danger">*</span>
                                     </label>
                                     <input type="number" class="form-control" id="amount" name="amount" required
-                                        placeholder="0.00" step="0.01" min="0">
+                                        placeholder="0.00" step="0.01" min="0" autocomplete="off">
                                 </div>
                             </div>
 
@@ -176,11 +176,9 @@
                                 <label for="expenseCategory" class="form-label">Expense Category</label>
                                 <select class="form-select" id="expenseCategory" name="expense_category" onchange="updateFileInputs()">
                                     <option value="">-- Select Category --</option>
-                                    <option value="Computer Hardware & Technological Devices">Computer Hardware & Technological Devices</option>
-                                    <option value="Curriculum">Curriculum</option>
-                                    <option value="Tutoring & Teaching Services - Accredited Facility/Business">Tutoring & Teaching Services - Accredited Facility/Business</option>
-                                    <option value="Tutoring & Teaching Services - Accredited Individual">Tutoring & Teaching Services - Accredited Individual</option>
-                                    <option value="Supplemental Materials (Curriculum Always Required)">Supplemental Materials (Curriculum Always Required)</option>
+                                    {% for category in expense_categories %}
+                                    <option value="{{ category }}">{{ category }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
 
@@ -289,8 +287,12 @@
                 return;
             }
 
+            const sortedTemplates = [...templates].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+
             let html = '<div class="row">';
-            templates.forEach(template => {
+            sortedTemplates.forEach(template => {
                 // Resolve vendor_id to vendor name (or use store_name for backward compatibility)
                 const vendorDisplay = template.vendor_name || template.store_name || 'Unknown Vendor';
                 html += `
@@ -328,26 +330,16 @@
             document.getElementById('templateId').value = '';
             document.getElementById('studentIdInput').value = studentId;
             document.getElementById('templateForm').reset();
+            currentTemplateFiles = {};
+            document.getElementById('filesSection').innerHTML = '';
             document.getElementById('templateName').focus();
             window.scrollTo(0, document.getElementById('formSection').offsetTop - 100);
         }
 
-        // File requirement configurations
-        const expenseCategories = {
-            'Computer Hardware & Technological Devices': ['Receipt'],
-            'Curriculum': ['Receipt'],
-            'Tutoring & Teaching Services - Accredited Facility/Business': ['Receipt', 'Invoice'],
-            'Tutoring & Teaching Services - Accredited Individual': ['Receipt', 'Invoice', 'Attestation'],
-            'Supplemental Materials (Curriculum Always Required)': ['Curriculum', 'Receipt']
-        };
-
-        const directPayCategories = {
-            'Computer Hardware & Technological Devices': ['Invoice'],
-            'Curriculum': ['Invoice'],
-            'Tutoring & Teaching Services - Accredited Facility/Business': ['Invoice'],
-            'Tutoring & Teaching Services - Accredited Individual': ['Invoice'],
-            'Supplemental Materials (Curriculum Always Required)': ['Invoice', 'Curriculum']
-        };
+        // File requirement configurations - rendered from the server so this page
+        // always matches the categories available on the main submission form.
+        const expenseCategories = {{ expense_categories | tojson }};
+        const directPayCategories = {{ direct_pay_categories | tojson }};
 
         const fileLabels = {
             'Receipt': 'Receipt/Payment Proof (Directory or File Path)',
@@ -361,6 +353,11 @@
             return requestType === 'Direct Pay' ? directPayCategories : expenseCategories;
         }
 
+        // File paths saved on the template currently being edited, keyed by file type
+        // (e.g. 'Invoice'). Re-applied by updateFileInputs() whenever the category or
+        // request type changes so previously entered paths aren't lost.
+        let currentTemplateFiles = {};
+
         function updateFileInputs() {
             const category = document.getElementById('expenseCategory').value;
             const container = document.getElementById('filesSection');
@@ -371,7 +368,7 @@
             }
 
             const categoryConfig = getCategoryConfig();
-            const requiredFiles = categoryConfig[category];
+            const requiredFiles = categoryConfig[category]?.required_fields;
 
             if (!requiredFiles) {
                 container.innerHTML = '';
@@ -402,6 +399,19 @@
 
             html += '</div>';
             container.innerHTML = html;
+
+            // Re-populate any paths already saved on the template for file types
+            // that are still required after this category/request-type change.
+            requiredFiles.forEach(fileType => {
+                const savedPath = currentTemplateFiles[fileType];
+                if (savedPath) {
+                    const fieldId = `file_${fileType.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+                    const input = document.getElementById(fieldId);
+                    if (input) {
+                        input.value = savedPath;
+                    }
+                }
+            });
         }
 
         function editTemplate(templateId, studentId) {
@@ -425,19 +435,12 @@
             document.getElementById('expenseCategory').value = template.expense_category || '';
             document.getElementById('comment').value = template.comment || '';
 
-            // Update file inputs based on category
-            updateFileInputs();
+            // Remember the saved file paths so updateFileInputs() can keep them
+            // populated even if the category or request type is changed afterward.
+            currentTemplateFiles = template.files || {};
 
-            // Populate file paths if they exist
-            if (template.files) {
-                Object.entries(template.files).forEach(([fileType, filePath]) => {
-                    const fieldId = `file_${fileType.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-                    const input = document.getElementById(fieldId);
-                    if (input) {
-                        input.value = filePath;
-                    }
-                });
-            }
+            // Update file inputs based on category (also re-applies saved paths above)
+            updateFileInputs();
 
             // Show form and scroll to it
             document.getElementById('formSection').style.display = 'block';
@@ -469,6 +472,7 @@
         function cancelForm() {
             document.getElementById('formSection').style.display = 'none';
             document.getElementById('templateForm').reset();
+            currentTemplateFiles = {};
             document.getElementById('filesSection').innerHTML = '';
         }
 
@@ -485,7 +489,7 @@
 
             // Validate file paths
             const categoryConfig = getCategoryConfig();
-            const requiredFiles = categoryConfig[category] || [];
+            const requiredFiles = categoryConfig[category]?.required_fields || [];
             const files = {};
             let missingFiles = [];
 
