@@ -189,7 +189,8 @@ class SubmissionOrchestrator:
 
     def submit_direct_pay(self, submission_data: Dict, auto_submit: bool = False) -> bool:
         """
-        Submit direct pay request
+        Submit direct pay request, using ClassWallet's 2026/2027 4-step wizard
+        (Upload Invoice -> Manage Expenses -> Select Purse -> Review & Submit).
 
         Args:
             submission_data: Dictionary containing:
@@ -199,7 +200,9 @@ class SubmissionOrchestrator:
                 - expense_category: Expense category
                 - po_number: Purchase order number
                 - comment: Comment text
-                - files: Dictionary of {file_type: file_path}
+                - files: Dictionary of {file_type: file_path}. The 'invoice' entry is
+                         uploaded on step 1; any other file types (e.g. curriculum) are
+                         uploaded as additional documentation on step 2.
                 - classwallet_search_term: (optional) Exact search term for vendor lookup
             auto_submit: If True, automatically submit without review. If False, stop before final submit.
 
@@ -218,8 +221,17 @@ class SubmissionOrchestrator:
             expense_category = submission_data.get('expense_category')
             po_number = submission_data.get('po_number')
             comment = submission_data.get('comment')
-            files = submission_data.get('files', {})
+            files = submission_data.get('files', {}) or {}
             search_term = submission_data.get('classwallet_search_term')  # Get search term if available
+
+            invoice_files = {}
+            additional_files = {}
+            if isinstance(files, dict):
+                for file_type, file_data in files.items():
+                    if file_type.lower() == 'invoice':
+                        invoice_files[file_type] = file_data
+                    else:
+                        additional_files[file_type] = file_data
 
             logger.info(f"Starting direct pay submission for {student} (auto_submit={auto_submit})")
 
@@ -228,32 +240,35 @@ class SubmissionOrchestrator:
                 self.last_error = f"Could not select student '{student}' in ClassWallet. Please verify the student exists in ClassWallet."
                 return False
 
-            # Step 2: Start direct pay (with optional search_term for vendor lookup)
-            if not self.automation.start_direct_pay(vendor_name, amount, search_term=search_term):
+            # Step 2: Start direct pay (search + select vendor; lands on Upload Invoice step)
+            if not self.automation.start_direct_pay(vendor_name, search_term=search_term):
                 self.last_error = f"Could not find vendor '{vendor_name}' in ClassWallet. Check the vendor name and search term in Manage Vendors."
                 return False
 
-            # Step 3: Upload files (no payment receipt for direct pay)
-            if not self.automation.upload_files(files):
-                self.last_error = "Failed to upload files to ClassWallet. Check file format and size. The interface may have changed."
+            # Step 3: Upload the invoice (triggers IDP scan, advances to Manage Expenses)
+            if not self.automation.upload_direct_pay_invoice(invoice_files):
+                self.last_error = "Failed to upload the invoice to ClassWallet. Check file format and size. The interface may have changed."
                 return False
 
-            # Step 4: Select expense category
-            if not self.automation.select_expense_category(expense_category):
-                self.last_error = f"Could not select expense category '{expense_category}'. Please verify the category is available in ClassWallet."
+            # Step 4: Manage Expenses - known-field overrides, line item amount/category, Continue
+            if not self.automation.fill_direct_pay_expenses(
+                vendor_name, amount, expense_category, student_name=student,
+                po_number=po_number, additional_files=additional_files
+            ):
+                self.last_error = f"Could not fill expense details or select category '{expense_category}'. Please verify the category is available in ClassWallet."
                 return False
 
-            # Step 5: Fill additional info (comments and invoice/quote number for Direct Pay)
-            if not self.automation.fill_direct_pay_additional_info(po_number, comment):
-                self.last_error = "Failed to fill invoice number or comment. The ClassWallet interface may have changed."
+            # Step 5: Select Purse
+            if not self.automation.select_direct_pay_purse():
+                self.last_error = "Could not select the purse to pay from. The ClassWallet interface may have changed."
                 return False
 
-            # Step 5B: Proceed to Review page
-            if not self.automation.proceed_direct_pay_to_review():
-                self.last_error = "Could not proceed to review page. The ClassWallet interface may have changed."
+            # Step 6: Review & Submit - fill approver comment
+            if not self.automation.fill_direct_pay_review(comment):
+                self.last_error = "Failed to fill the review page. The ClassWallet interface may have changed."
                 return False
 
-            # Step 6: Submit (only if auto_submit is True)
+            # Step 7: Submit (only if auto_submit is True)
             if auto_submit:
                 if not self.automation.submit_direct_pay():
                     self.last_error = "Failed to submit direct pay. Please review the form in ClassWallet and submit manually."
