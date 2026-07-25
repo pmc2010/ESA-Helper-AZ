@@ -101,7 +101,7 @@ def manage_vendors():
 @main_bp.route('/manage-templates')
 def manage_templates():
     """Render template management page"""
-    students = load_student_profiles()
+    students = sorted(load_student_profiles(), key=lambda s: s.get('name', '').lower())
     return render_template(
         'manage-templates.html',
         students=students,

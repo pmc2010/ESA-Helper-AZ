@@ -241,7 +241,10 @@
         function populateVendorDropdown() {
             const vendorSelect = document.getElementById('vendorId');
             vendorSelect.innerHTML = '<option value="">-- Select Vendor --</option>';
-            vendors.forEach(vendor => {
+            const sortedVendors = [...vendors].sort((a, b) =>
+                (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' })
+            );
+            sortedVendors.forEach(vendor => {
                 const option = document.createElement('option');
                 option.value = vendor.id;
                 option.textContent = vendor.name;
