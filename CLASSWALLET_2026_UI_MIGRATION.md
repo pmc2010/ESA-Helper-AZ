@@ -2,6 +2,79 @@
 
 ## ⏭️ Resume here if this session gets interrupted
 
+**Update 2026-07-24 ~22:25: WORKING.** Live retry succeeded end-to-end with the delete-confirmation
+fix in place - a real Reimbursement (multi-item receipt collapsed to one line item, invoice +
+curriculum files, category/amount/comment overwritten) submitted successfully through ESA
+Helper. Both Direct Pay and Reimbursement are now confirmed working against the redesigned
+ClassWallet UI. Code committed and pushed to GitHub as of this update.
+
+**Update 2026-07-24 ~22:10: Reimbursement rewritten too, not yet live-tested.** Turns out
+Reimbursement was broken by the exact same redesign - confirmed via a second live walkthrough
+(see "Reimbursement" section below). It uses the *same* 4-step wizard component as Direct Pay
+(`#/reimbursements/wizard/...` instead of `#/direct_pay/wizard/...`), same Manage Expenses field
+names, minus the "User Name" field. Given how much was shared, the fix:
+- Renamed the genuinely-shared wizard-step methods to drop the "direct_pay"-specific naming:
+  `upload_direct_pay_invoice`→`upload_wizard_invoice`, `select_direct_pay_purse`→`select_wizard_purse`,
+  `fill_direct_pay_review`→`fill_wizard_review`, `submit_direct_pay`→`submit_wizard` (the
+  classwallet.py instance methods only - `SubmissionOrchestrator.submit_direct_pay` in
+  automation.py, the public per-flow API, was NOT renamed and still exists separately from
+  `submit_reimbursement`), `_select_direct_pay_line_item_category`→`_select_line_item_category`.
+- Deleted all the old pre-redesign Reimbursement code: `upload_files`, `select_expense_category`
+  (274 lines of Arizona-ESA-checkbox/category fallback-selector logic for the old single-page
+  purse+category step), `fill_po_and_comment`, the old `start_reimbursement(store_name, amount)`,
+  and the old `submit_reimbursement()` instance method - all fully superseded.
+- Added `fill_reimbursement_expenses()` + `_collapse_to_single_line_item()`: unlike Direct Pay's
+  single pre-existing line item, IDP can split a Reimbursement receipt into multiple rows (one per
+  purchased item) - since ESA Helper's form only models one lump-sum amount/category per
+  submission, extra rows are deleted (via each row's "Remove expense" button, aria-label-matched,
+  removing from the end to dodge index-shifting) and the remaining row is fully overwritten:
+  price = ESA Helper's amount, description = ESA Helper's comment, category = ESA Helper's
+  category. Shipping/discount/tax are always zeroed (force-set, same masked-input fix as
+  everything else) so the total matches the amount exactly regardless of what the scan picked up
+  off the receipt.
+- `SubmissionOrchestrator.submit_reimbursement()` rewritten to the same 7-step sequence as Direct
+  Pay's orchestrator, with one addition: `files` are split by primary key `invoice`, falling back
+  to `receipt` if no `invoice` key is present (Direct Pay only ever had `invoice`), since
+  Reimbursement's required file types vary by category (receipt, invoice, attestation,
+  curriculum per `CLAUDE.md`) - **this fallback is an assumption, not yet confirmed against a
+  receipt-only (no invoice) submission.**
+- New `tests/test_reimbursement.py` (7 tests, mirrors `test_direct_pay.py`'s structure). Full
+  suite: 126/126 passing. **Not yet tried live** - this is written from a real DOM walkthrough
+  (confirmed field names, confirmed same wizard) but the actual code hasn't been run against
+  ClassWallet yet, only unit-tested against mocks.
+
+Assumptions carried over unverified from the old code because we didn't specifically re-check
+them this time (low risk, but flagging): the `button[data-test='start-reimbursement']` selector
+for the "Start a new Reimbursement" button on the ClassWallet home page (unrelated to the wizard
+redesign, so likely unchanged) and the `button[aria-label='Remove expense']` selector (this one
+*was* confirmed live via JS inspection, see below - not actually unverified, kept here as the
+first thing to check if row-deletion fails).
+
+**Update 2026-07-24 ~22:20**: First live retry hit a new snag - clicking "Remove expense" opens
+an "Are you sure you want to delete this item?" confirmation dialog that has to be confirmed via
+its "Yes, Delete Item" button, or the row never actually gets removed. Fixed:
+`_collapse_to_single_line_item()` now confirms each deletion (text-match on "yes, delete", same
+pattern as Continue/Submit). Retried live immediately after this fix and it worked end-to-end -
+see the "WORKING" update at the top of this file.
+
+## Reimbursement wizard - confirmed via live walkthrough 2026-07-24 22:00
+
+Same wizard, same field names as Direct Pay's Manage Expenses page (`vendor`, `poNumber`,
+`rows[N].description/quantity/price`, `shipping`, `discount`, `tax`), confirmed via
+`document.querySelectorAll('input, textarea')` on `https://app.classwallet.com/#/reimbursements/wizard/2-manage-expenses`.
+Differences from Direct Pay:
+- No `studentName` field at all (Details section only has Vendor*, Transaction Date, Invoice Number).
+- Section header text is "Reimbursement Details" instead of "Direct Pay Details" (cosmetic only,
+  doesn't affect selectors since nothing there is targeted by text).
+- IDP scanned 3 line-item rows from a single multi-item receipt in the observed test (vs. Direct
+  Pay's invoice which always produced exactly 1 row) - this is what motivated the
+  collapse-to-single-row approach in `fill_reimbursement_expenses`.
+- Each row's delete control is `button[aria-label='Remove expense']` (one per row) - confirmed via
+  live JS inspection, not previously seen on the Direct Pay page (Direct Pay's test never had a
+  second row to delete, so this control may exist there too but was never exercised/confirmed).
+
+## Direct Pay - WORKING (previous session)
+
 **Update 2026-07-24 ~14:30: WORKING.** Third live attempt succeeded end-to-end - the real invoice
 was submitted successfully through ESA Helper's Direct Pay flow. All four issues found across the
 first three attempts (wizard reorder, clear()-append bug, calendar-picker popup blocking the

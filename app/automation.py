@@ -102,7 +102,9 @@ class SubmissionOrchestrator:
 
     def submit_reimbursement(self, submission_data: Dict, auto_submit: bool = False) -> bool:
         """
-        Submit reimbursement request
+        Submit reimbursement request, using ClassWallet's 2026/2027 4-step wizard
+        (Upload Invoice -> Manage Expenses -> Select Purse -> Review & Submit) - the same
+        wizard Direct Pay uses, minus the "User Name" field.
 
         Args:
             submission_data: Dictionary containing:
@@ -112,7 +114,10 @@ class SubmissionOrchestrator:
                 - expense_category: Expense category
                 - po_number: Purchase order number
                 - comment: Comment text
-                - files: Dictionary of {file_type: file_path}
+                - files: Dictionary of {file_type: file_path}. The 'invoice' entry (falling
+                         back to 'receipt' if no 'invoice' key is present) is uploaded on
+                         step 1; any other file types (e.g. curriculum) are uploaded as
+                         additional documentation on step 2.
             auto_submit: If True, automatically submit without review. If False, stop before final submit.
 
         Returns:
@@ -130,7 +135,16 @@ class SubmissionOrchestrator:
             expense_category = submission_data.get('expense_category')
             po_number = submission_data.get('po_number')
             comment = submission_data.get('comment')
-            files = submission_data.get('files', {})
+            files = submission_data.get('files', {}) or {}
+
+            primary_key = None
+            if isinstance(files, dict):
+                lower_keys = {k.lower(): k for k in files.keys()}
+                primary_key = lower_keys.get('invoice') or lower_keys.get('receipt')
+            invoice_files = {primary_key: files[primary_key]} if primary_key else {}
+            additional_files = (
+                {k: v for k, v in files.items() if k != primary_key} if isinstance(files, dict) else {}
+            )
 
             logger.info(f"Starting reimbursement submission for {student} (auto_submit={auto_submit})")
 
@@ -139,29 +153,38 @@ class SubmissionOrchestrator:
                 self.last_error = f"Could not select student '{student}' in ClassWallet. Please verify the student exists in ClassWallet."
                 return False
 
-            # Step 2: Start reimbursement
-            if not self.automation.start_reimbursement(store_name, amount):
-                self.last_error = f"Could not start reimbursement for '{store_name}'. The ClassWallet interface may have changed. Check the logs for details."
+            # Step 2: Start reimbursement (lands on Upload Invoice step)
+            if not self.automation.start_reimbursement():
+                self.last_error = "Could not start a new reimbursement in ClassWallet. The interface may have changed."
                 return False
 
-            # Step 3: Upload files
-            if not self.automation.upload_files(files):
-                self.last_error = "Failed to upload files to ClassWallet. Check file format, size, and format. The interface may have changed."
+            # Step 3: Upload the invoice/receipt (triggers IDP scan, advances to Manage Expenses)
+            if not self.automation.upload_wizard_invoice(invoice_files):
+                self.last_error = "Failed to upload the invoice/receipt to ClassWallet. Check file format and size. The interface may have changed."
                 return False
 
-            # Step 4: Select expense category
-            if not self.automation.select_expense_category(expense_category):
-                self.last_error = f"Could not select expense category '{expense_category}'. Please verify the category is available in ClassWallet."
+            # Step 4: Manage Expenses - collapse to a single line item, overwrite with
+            # ESA Helper's amount/category/comment, zero shipping/discount/tax, Continue
+            if not self.automation.fill_reimbursement_expenses(
+                amount, expense_category, comment=comment, vendor_name=store_name,
+                po_number=po_number, additional_files=additional_files
+            ):
+                self.last_error = f"Could not fill expense details or select category '{expense_category}'. Please verify the category is available in ClassWallet."
                 return False
 
-            # Step 5: Fill PO and comment
-            if not self.automation.fill_po_and_comment(po_number, comment, auto_submit=auto_submit):
-                self.last_error = "Failed to fill purchase order number or comment. The ClassWallet interface may have changed."
+            # Step 5: Select Purse
+            if not self.automation.select_wizard_purse():
+                self.last_error = "Could not select the purse to pay from. The ClassWallet interface may have changed."
                 return False
 
-            # Step 6: Submit (only if auto_submit is True)
+            # Step 6: Review & Submit - fill approver comment
+            if not self.automation.fill_wizard_review(comment):
+                self.last_error = "Failed to fill the review page. The ClassWallet interface may have changed."
+                return False
+
+            # Step 7: Submit (only if auto_submit is True)
             if auto_submit:
-                if not self.automation.submit_reimbursement():
+                if not self.automation.submit_wizard():
                     self.last_error = "Failed to submit reimbursement. Please review the form in ClassWallet and submit manually."
                     return False
                 logger.info("Reimbursement auto-submitted")
@@ -246,7 +269,7 @@ class SubmissionOrchestrator:
                 return False
 
             # Step 3: Upload the invoice (triggers IDP scan, advances to Manage Expenses)
-            if not self.automation.upload_direct_pay_invoice(invoice_files):
+            if not self.automation.upload_wizard_invoice(invoice_files):
                 self.last_error = "Failed to upload the invoice to ClassWallet. Check file format and size. The interface may have changed."
                 return False
 
@@ -259,18 +282,18 @@ class SubmissionOrchestrator:
                 return False
 
             # Step 5: Select Purse
-            if not self.automation.select_direct_pay_purse():
+            if not self.automation.select_wizard_purse():
                 self.last_error = "Could not select the purse to pay from. The ClassWallet interface may have changed."
                 return False
 
             # Step 6: Review & Submit - fill approver comment
-            if not self.automation.fill_direct_pay_review(comment):
+            if not self.automation.fill_wizard_review(comment):
                 self.last_error = "Failed to fill the review page. The ClassWallet interface may have changed."
                 return False
 
             # Step 7: Submit (only if auto_submit is True)
             if auto_submit:
-                if not self.automation.submit_direct_pay():
+                if not self.automation.submit_wizard():
                     self.last_error = "Failed to submit direct pay. Please review the form in ClassWallet and submit manually."
                     return False
                 logger.info("Direct pay auto-submitted")

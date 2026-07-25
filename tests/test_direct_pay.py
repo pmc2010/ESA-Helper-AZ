@@ -11,11 +11,11 @@ def _mock_successful_workflow(mock_automation):
     mock_automation.login.return_value = True
     mock_automation.select_student.return_value = True
     mock_automation.start_direct_pay.return_value = True
-    mock_automation.upload_direct_pay_invoice.return_value = True
+    mock_automation.upload_wizard_invoice.return_value = True
     mock_automation.fill_direct_pay_expenses.return_value = True
-    mock_automation.select_direct_pay_purse.return_value = True
-    mock_automation.fill_direct_pay_review.return_value = True
-    mock_automation.submit_direct_pay.return_value = True
+    mock_automation.select_wizard_purse.return_value = True
+    mock_automation.fill_wizard_review.return_value = True
+    mock_automation.submit_wizard.return_value = True
 
 
 class TestDirectPayWorkflow:
@@ -48,13 +48,13 @@ class TestDirectPayWorkflow:
         assert result is True
         mock_automation.select_student.assert_called_once_with('Student A')
         mock_automation.start_direct_pay.assert_called_once_with('Hayden Acres', search_term='hayden acres llc')
-        mock_automation.upload_direct_pay_invoice.assert_called_once_with({})
+        mock_automation.upload_wizard_invoice.assert_called_once_with({})
         mock_automation.fill_direct_pay_expenses.assert_called_once_with(
             'Hayden Acres', '200.85', 'Tutoring & Teaching Services', student_name='Student A',
             po_number='20251111_1234', additional_files={}
         )
-        mock_automation.select_direct_pay_purse.assert_called_once()
-        mock_automation.fill_direct_pay_review.assert_called_once_with('Horse riding lessons')
+        mock_automation.select_wizard_purse.assert_called_once()
+        mock_automation.fill_wizard_review.assert_called_once_with('Horse riding lessons')
 
     @patch('app.automation.ClassWalletAutomation')
     def test_direct_pay_splits_invoice_from_additional_files(self, mock_automation_class):
@@ -84,7 +84,7 @@ class TestDirectPayWorkflow:
         result = orchestrator.submit_direct_pay(submission_data, auto_submit=True)
 
         assert result is True
-        mock_automation.upload_direct_pay_invoice.assert_called_once_with(
+        mock_automation.upload_wizard_invoice.assert_called_once_with(
             {'invoice': {'name': 'invoice.pdf', 'path': '/tmp/invoice.pdf'}}
         )
         _, kwargs = mock_automation.fill_direct_pay_expenses.call_args
@@ -119,8 +119,8 @@ class TestDirectPayWorkflow:
         call_args = mock_automation.start_direct_pay.call_args
         assert call_args[1]['search_term'] == 'custom search term'
 
-        # Should not call submit_direct_pay when auto_submit=False
-        mock_automation.submit_direct_pay.assert_not_called()
+        # Should not call submit_wizard when auto_submit=False
+        mock_automation.submit_wizard.assert_not_called()
         assert result is True
 
     @patch('app.automation.ClassWalletAutomation')
@@ -179,7 +179,7 @@ class TestDirectPayWorkflow:
         result = orchestrator.submit_direct_pay(submission_data)
 
         assert result is False
-        mock_automation.upload_direct_pay_invoice.assert_not_called()
+        mock_automation.upload_wizard_invoice.assert_not_called()
 
     @patch('app.automation.log_submission')
     @patch('app.automation.ClassWalletAutomation')
@@ -226,7 +226,7 @@ class TestDirectPayWorkflow:
         mock_automation = MagicMock()
         mock_automation_class.return_value = mock_automation
         _mock_successful_workflow(mock_automation)
-        # Note: submit_direct_pay should NOT be called
+        # Note: submit_wizard should NOT be called
 
         orchestrator = SubmissionOrchestrator()
         orchestrator.automation = mock_automation
@@ -246,8 +246,8 @@ class TestDirectPayWorkflow:
         result = orchestrator.submit_direct_pay(submission_data, auto_submit=False)
 
         assert result is True
-        mock_automation.fill_direct_pay_review.assert_called_once()
-        mock_automation.submit_direct_pay.assert_not_called()
+        mock_automation.fill_wizard_review.assert_called_once()
+        mock_automation.submit_wizard.assert_not_called()
 
 
 class TestDirectPayExpensesStep:
