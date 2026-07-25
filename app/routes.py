@@ -2347,6 +2347,20 @@ def get_analytics():
             'students': []
         }
 
+        def in_month(sub, year, month):
+            try:
+                sub_date = datetime.fromisoformat(sub['timestamp'])
+                return sub_date.year == year and sub_date.month == month
+            except (ValueError, KeyError):
+                return False
+
+        def in_range(sub, start, end):
+            try:
+                sub_date = datetime.fromisoformat(sub['timestamp'])
+                return start <= sub_date <= end
+            except (ValueError, KeyError):
+                return False
+
         for student in students:
             # Get allotment for this fiscal year
             allotments = student.get('esa_allotments', [])
@@ -2358,15 +2372,19 @@ def get_analytics():
                 if s.get('student') == student['name']
             ]
 
+            # Only count submissions ClassWallet actually confirmed toward spending totals.
+            # auto_submitted=False means the automation only filled out the form and left it
+            # on ClassWallet's Review page for manual confirmation - since we don't know
+            # whether the user went on to actually submit it there, counting it here would
+            # risk overstating real spending and understating remaining allotment. Missing
+            # auto_submitted (older log entries, predating this field) is treated as
+            # confirmed rather than retroactively excluded.
+            confirmed_submissions = [s for s in student_submissions if s.get('auto_submitted') is not False]
+            pending_submissions = [s for s in student_submissions if s.get('auto_submitted') is False]
+
             # Filter by month
-            month_submissions = []
-            for sub in student_submissions:
-                try:
-                    sub_date = datetime.fromisoformat(sub['timestamp'])
-                    if sub_date.year == selected_date.year and sub_date.month == selected_date.month:
-                        month_submissions.append(sub)
-                except (ValueError, KeyError):
-                    continue
+            month_submissions = [s for s in confirmed_submissions if in_month(s, selected_date.year, selected_date.month)]
+            month_pending_count = sum(1 for s in pending_submissions if in_month(s, selected_date.year, selected_date.month))
 
             # Calculate totals
             total_amount = sum(float(s.get('amount', 0)) for s in month_submissions)
@@ -2375,14 +2393,8 @@ def get_analytics():
 
             # YTD calculations (July 1 to current date)
             fy_start = datetime(fiscal_year, 7, 1)
-            ytd_submissions = []
-            for sub in student_submissions:
-                try:
-                    sub_date = datetime.fromisoformat(sub['timestamp'])
-                    if sub_date >= fy_start and sub_date <= selected_date:
-                        ytd_submissions.append(sub)
-                except (ValueError, KeyError):
-                    continue
+            ytd_submissions = [s for s in confirmed_submissions if in_range(s, fy_start, selected_date)]
+            ytd_pending_count = sum(1 for s in pending_submissions if in_range(s, fy_start, selected_date))
 
             ytd_amount = sum(float(s.get('amount', 0)) for s in ytd_submissions)
             ytd_count = len(ytd_submissions)
@@ -2399,8 +2411,10 @@ def get_analytics():
                 'month_submissions': submission_count,
                 'month_total': round(total_amount, 2),
                 'month_average': round(avg_amount, 2),
+                'month_pending': month_pending_count,
                 'ytd_submissions': ytd_count,
                 'ytd_total': round(ytd_amount, 2),
+                'ytd_pending': ytd_pending_count,
                 'annualized_rate': round(annualized_rate, 2),
                 'allotment': None
             }

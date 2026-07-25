@@ -328,9 +328,15 @@ Full suite: 119/119 passing.
    shows a "Pending Review in ClassWallet" badge instead of claiming success when
    `auto_submitted` is `false`. The pre-submission confirmation-modal copy in `app.js` was also
    softened since it previously stated the automation "will... submit the request" regardless of
-   the Auto-Submit setting. Not touched: the Reports/analytics fiscal-year dollar totals still
-   don't distinguish confirmed vs. pending-review submissions - flagged but out of scope for this
-   fix since it touches ESA compliance-facing financial totals.
+   the Auto-Submit setting.
+7. **Reports/analytics totals fixed too (2026-07-25)**: `/api/reports/analytics` (`get_analytics()`
+   in `routes.py`) was including pending-review submissions (`auto_submitted: false`) in
+   `month_total`, `ytd_total`, `annualized_rate`, and the allotment `percent_used`/remaining
+   calculations - overstating real spending and understating remaining allotment. Now excludes
+   them from those figures (missing `auto_submitted`, i.e. older log entries, is still treated as
+   confirmed). Added `month_pending`/`ytd_pending` counts to the response, surfaced as a small
+   "Pending Review in ClassWallet" metric card on `reports.html` (only shown when count > 0) so
+   the totals don't just silently look lower with no explanation.
 
 ## Privacy note
 

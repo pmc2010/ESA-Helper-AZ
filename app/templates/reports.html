@@ -355,6 +355,13 @@
                         <div class="metric-label">Annualized Rate</div>
                         <div class="metric-value currency">$${student.annualized_rate.toFixed(2)}</div>
                     </div>
+                    ${student.ytd_pending > 0 ? `
+                    <div class="metric-card bg-white p-3">
+                        <div class="metric-label">Pending Review in ClassWallet</div>
+                        <div class="metric-value warning-text">${student.ytd_pending}</div>
+                        <div style="font-size: 0.8rem; color: #6c757d;">not yet included in spending totals</div>
+                    </div>
+                    ` : ''}
                 </div>
             `;
 
