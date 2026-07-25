@@ -183,15 +183,28 @@ class SubmissionOrchestrator:
                 return False
 
             # Step 7: Submit (only if auto_submit is True)
+            actually_submitted = False
             if auto_submit:
-                if not self.automation.submit_wizard():
-                    self.last_error = "Failed to submit reimbursement. Please review the form in ClassWallet and submit manually."
+                submit_result = self.automation.submit_wizard()
+                # submit_wizard() returns a confirmation dict (always truthy, even on
+                # failure) rather than a plain bool - check its 'success' key rather than
+                # just its truthiness, or a real submission failure would be silently
+                # treated as success (and logged as such below).
+                actually_submitted = (
+                    submit_result.get('success', False) if isinstance(submit_result, dict) else bool(submit_result)
+                )
+                if not actually_submitted:
+                    detail = submit_result.get('message') if isinstance(submit_result, dict) else None
+                    self.last_error = detail or "Failed to submit reimbursement. Please review the form in ClassWallet and submit manually."
                     return False
                 logger.info("Reimbursement auto-submitted")
             else:
                 logger.info("Auto-submit disabled. Stopped before final submit for manual review.")
 
-            # Log submission
+            # Log submission. auto_submitted reflects whether ClassWallet actually
+            # confirmed the submission - when auto_submit is off, the automation only
+            # fills the form and waits for the browser to close, so we genuinely don't
+            # know whether the user submitted it or backed out; don't claim success either way.
             log_submission({
                 'type': 'reimbursement',
                 'student': student,
@@ -199,7 +212,8 @@ class SubmissionOrchestrator:
                 'amount': amount,
                 'po_number': po_number,
                 'expense_category': submission_data.get('category'),
-                'comment': submission_data.get('comment')
+                'comment': submission_data.get('comment'),
+                'auto_submitted': actually_submitted
             })
 
             logger.info("Reimbursement workflow completed successfully")
@@ -292,15 +306,28 @@ class SubmissionOrchestrator:
                 return False
 
             # Step 7: Submit (only if auto_submit is True)
+            actually_submitted = False
             if auto_submit:
-                if not self.automation.submit_wizard():
-                    self.last_error = "Failed to submit direct pay. Please review the form in ClassWallet and submit manually."
+                submit_result = self.automation.submit_wizard()
+                # submit_wizard() returns a confirmation dict (always truthy, even on
+                # failure) rather than a plain bool - check its 'success' key rather than
+                # just its truthiness, or a real submission failure would be silently
+                # treated as success (and logged as such below).
+                actually_submitted = (
+                    submit_result.get('success', False) if isinstance(submit_result, dict) else bool(submit_result)
+                )
+                if not actually_submitted:
+                    detail = submit_result.get('message') if isinstance(submit_result, dict) else None
+                    self.last_error = detail or "Failed to submit direct pay. Please review the form in ClassWallet and submit manually."
                     return False
                 logger.info("Direct pay auto-submitted")
             else:
                 logger.info("Auto-submit disabled. Stopped at Review page for manual submission.")
 
-            # Log submission
+            # Log submission. auto_submitted reflects whether ClassWallet actually
+            # confirmed the submission - when auto_submit is off, the automation only
+            # fills the form and waits for the browser to close, so we genuinely don't
+            # know whether the user submitted it or backed out; don't claim success either way.
             log_submission({
                 'type': 'direct_pay',
                 'student': student,
@@ -308,7 +335,8 @@ class SubmissionOrchestrator:
                 'amount': amount,
                 'po_number': po_number,
                 'expense_category': submission_data.get('category'),
-                'comment': submission_data.get('comment')
+                'comment': submission_data.get('comment'),
+                'auto_submitted': actually_submitted
             })
 
             logger.info("Direct pay workflow completed successfully")

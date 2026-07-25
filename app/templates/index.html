@@ -650,7 +650,7 @@
                     <h5 class="modal-title">Submission Successful</h5>
                 </div>
                 <div class="modal-body">
-                    <p>Your reimbursement/direct pay request has been submitted successfully!</p>
+                    <p id="successMessage">Your reimbursement/direct pay request has been submitted successfully!</p>
                     <p><strong>PO Number:</strong> <span id="successPoNumber"></span></p>
                 </div>
                 <div class="modal-footer">
@@ -1382,6 +1382,10 @@
                 const student = submission.student || 'N/A';
                 const vendor = submission.store_name || submission.vendor_name || 'N/A';
                 const amount = parseFloat(submission.amount || 0).toFixed(2);
+                // auto_submitted is only present on entries logged after this field was
+                // added - treat missing (older entries, or manual log entries) as
+                // submitted rather than retroactively flagging them as pending.
+                const pendingReview = submission.auto_submitted === false;
 
                 return `
                     <a href="#" class="list-group-item list-group-item-action" onclick="showRecentSubmissionDetails(${index}); return false;">
@@ -1389,6 +1393,7 @@
                             <div>
                                 <h6 class="mb-1" style="font-size: 0.9rem;">${student}</h6>
                                 <small class="text-muted">${vendor}</small>
+                                ${pendingReview ? '<br><span class="badge bg-warning text-dark mt-1">Pending Review in ClassWallet</span>' : ''}
                             </div>
                             <span class="badge bg-success">$${amount}</span>
                         </div>
@@ -1436,9 +1441,11 @@
                                 <div class="row">
                                     <div class="col-6"><strong>Status:</strong></div>
                                     <div class="col-6 text-end">
-                                        <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
-                                            ${submission.success !== false ? 'Success' : 'Failed'}
-                                        </span>
+                                        ${submission.auto_submitted === false ? `
+                                            <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                        ` : `
+                                            <span class="badge bg-success">Submitted</span>
+                                        `}
                                     </div>
                                 </div>
                         `;

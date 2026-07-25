@@ -271,8 +271,13 @@
                 const student = submission.student || 'N/A';
                 const vendor = submission.store_name || submission.vendor_name || 'N/A';
                 const amount = parseFloat(submission.amount || 0).toFixed(2);
-                const status = submission.success !== false ? 'success' : 'failed';
-                const statusText = status === 'success' ? 'Successful' : 'Failed';
+                // auto_submitted === false means the automation only filled the form and
+                // left it on ClassWallet's Review page for manual confirmation - it does
+                // NOT mean the request was actually submitted, so don't call it "Successful".
+                const status = submission.auto_submitted === false
+                    ? 'pending'
+                    : (submission.success === false ? 'failed' : 'success');
+                const statusText = status === 'pending' ? 'Pending Review' : (status === 'success' ? 'Successful' : 'Failed');
                 const statusClass = `status-${status}`;
                 const timestamp = submission.timestamp || '';
 
@@ -393,9 +398,13 @@
                                 <div class="detail-row">
                                     <span class="detail-label">Status:</span>
                                     <span class="detail-value">
-                                        <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
-                                            ${submission.success !== false ? 'Successful' : 'Failed'}
-                                        </span>
+                                        ${submission.auto_submitted === false ? `
+                                            <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                        ` : `
+                                            <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
+                                                ${submission.success !== false ? 'Successful' : 'Failed'}
+                                            </span>
+                                        `}
                                     </span>
                                 </div>
                         `;

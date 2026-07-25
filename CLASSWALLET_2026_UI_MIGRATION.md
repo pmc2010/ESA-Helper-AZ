@@ -309,11 +309,28 @@ Full suite: 119/119 passing.
    a ~3s no-modal timeout (existing behavior), and the subsequent 30s wait for `manage-expenses`
    should still apply — but this path wasn't observed live.
 4. Whether an invoice upload is now *mandatory* to start any Direct Pay submission (old flow made
-   files optional) — `upload_direct_pay_invoice` now fails fast with a clear error if no `invoice`
+   files optional) — `upload_wizard_invoice` now fails fast with a clear error if no `invoice`
    file is provided, since step 1 of the new wizard has no visible skip option.
-5. `CLAUDE.md`'s "Direct Pay Submission Workflow" section still describes the old
-   vendor→amount→upload→category order and hasn't been updated to match the new wizard - worth
-   doing next, but not urgent now that the code itself is confirmed working.
+5. ~~`CLAUDE.md`'s "Direct Pay Submission Workflow" section still describes the old
+   vendor→amount→upload→category order~~ — **done 2026-07-25**: rewrote that section (now
+   "Reimbursement & Direct Pay Submission Workflow") to describe the actual shared 4-step wizard.
+6. **Submission history status fixed (2026-07-25)**: `SubmissionOrchestrator.submit_direct_pay()`/
+   `submit_reimbursement()` were checking `if not self.automation.submit_wizard():` — but
+   `submit_wizard()` returns a confirmation *dict* (from `wait_for_submission_confirmation()`),
+   which is truthy even when its own `success` key is `False`, so a genuine ClassWallet-side
+   submission failure was silently logged as success. Separately, when `auto_submit=False`
+   (automation just fills the form and waits for you to close the browser), there was no way to
+   tell "you actually clicked Submit in ClassWallet" from "you reviewed and backed out" - both
+   got logged and displayed as "Submitted Successfully." Fixed: both orchestrator methods now
+   check the confirmation dict's `success` key properly, and logged submissions include a new
+   `auto_submitted` boolean. The frontend (`app/templates/index.html`'s success modal, Recent
+   Submissions sidebar, and `app/templates/submission-history.html`'s list/detail views) now
+   shows a "Pending Review in ClassWallet" badge instead of claiming success when
+   `auto_submitted` is `false`. The pre-submission confirmation-modal copy in `app.js` was also
+   softened since it previously stated the automation "will... submit the request" regardless of
+   the Auto-Submit setting. Not touched: the Reports/analytics fiscal-year dollar totals still
+   don't distinguish confirmed vs. pending-review submissions - flagged but out of scope for this
+   fix since it touches ESA compliance-facing financial totals.
 
 ## Privacy note
 

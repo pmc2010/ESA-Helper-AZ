@@ -1232,8 +1232,10 @@ function showConfirmation() {
         </ul>
 
         <div class="alert alert-info">
-            <strong>Note:</strong> This will open ClassWallet in your browser and automatically fill in the form.
-            The automation will then upload the files and submit the request.
+            <strong>Note:</strong> This will open ClassWallet in your browser and automatically fill in the form
+            and upload the files. Depending on your Auto-Submit setting (Manage Students), it will either submit
+            the request automatically or leave it on ClassWallet's Review page for you to confirm manually - the
+            request is only actually submitted once you (or the automation) click Submit in ClassWallet itself.
         </div>
     `;
 
@@ -1315,7 +1317,11 @@ async function confirmSubmit() {
 
         const result = await response.json();
 
-        if (response.ok) {
+        // Check result.success, not just the HTTP status - /api/submit always returns 200
+        // even when the automation failed or (when auto-submit is off) never actually
+        // clicked ClassWallet's own Submit button, so response.ok alone can't tell success
+        // from failure or from "form filled in but not yet confirmed by you in ClassWallet."
+        if (response.ok && result.success) {
             console.log('Submission successful, response:', result);
 
             // Hide confirmation modal
@@ -1324,10 +1330,24 @@ async function confirmSubmit() {
                 confirmationModal.hide();
             }
 
-            // Show success modal
+            // Show success modal. For automated (non-manual) submissions, the automation
+            // may have stopped at ClassWallet's Review page for you to confirm manually
+            // (result.auto_submitted === false) - closing that browser window without
+            // clicking Submit in ClassWallet does NOT submit the request, so don't claim
+            // it was submitted successfully in that case.
             document.getElementById('successPoNumber').textContent = result.po_number || poNumber;
-            const successTitle = isManualEntry ? 'Transaction Logged' : 'Submitted Successfully';
+            let successTitle = 'Submitted Successfully';
+            let successMessage = 'Your reimbursement/direct pay request has been submitted successfully!';
+            if (isManualEntry) {
+                successTitle = 'Transaction Logged';
+            } else if (result.auto_submitted === false) {
+                successTitle = 'Ready for Review in ClassWallet';
+                successMessage = result.message ||
+                    'Your request was filled in ClassWallet and is ready for review. ' +
+                    'It has NOT been submitted yet - please confirm it manually in ClassWallet.';
+            }
             document.querySelector('#successModal .modal-title').textContent = successTitle;
+            document.getElementById('successMessage').textContent = successMessage;
             new bootstrap.Modal(document.getElementById('successModal')).show();
 
             // Re-enable button since submission is complete
