@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 import time
 import logging
+import platform
 from pathlib import Path
 from datetime import datetime
 from app.utils import generate_po_number
@@ -370,13 +371,13 @@ class ClassWalletAutomation:
             self._log_error_with_context("Select Student", e)
             return False
 
-    def start_reimbursement(self, store_name: str, amount: str):
+    def start_reimbursement(self) -> bool:
         """
-        Start a new reimbursement submission
-
-        Args:
-            store_name: Name of the store/instructor
-            amount: Reimbursement amount
+        Click "Start a new Reimbursement" and wait to land on the Upload Invoice step of
+        the new 4-step wizard (Upload Invoice -> Manage Expenses -> Select Purse -> Review
+        & Submit) - same wizard Direct Pay uses. Unlike the old flow, there's no more
+        separate store-name/amount entry page here; the Vendor field and line-item amount
+        are now overwritten later in fill_reimbursement_expenses().
 
         Returns:
             bool: True if successful, False otherwise
@@ -385,59 +386,22 @@ class ClassWalletAutomation:
             logger.info("=" * 60)
             logger.info("STEP 2: START REIMBURSEMENT")
             logger.info("=" * 60)
-            logger.info(f"Store/Instructor: {store_name}")
-            logger.info(f"Amount: ${amount}")
 
-            # Wait for page to be ready after student selection
-            time.sleep(1)
+            time.sleep(1)  # Wait for page to be ready after student selection
 
-            logger.info("\nWaiting for 'Start a new Reimbursement' button to appear...")
-
-            # Find and click "Start a new Reimbursement" button
-            # Use data-test attribute for better reliability
+            logger.info("Waiting for 'Start a new Reimbursement' button to appear...")
             reimbursement_button = self.wait.until(
                 EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='start-reimbursement']"))
             )
-            logger.info("✓ Found 'Start a new Reimbursement' button")
-
             reimbursement_button.click()
-            logger.info("✓ Button clicked")
+            logger.info("✓ 'Start a new Reimbursement' clicked")
 
-            time.sleep(2)  # Wait for page to load after clicking
-
-            logger.info("\nWaiting for form fields to appear...")
-
-            # Fill store name - use id="store"
-            store_field = self.wait.until(
-                EC.presence_of_element_located((By.ID, "store"))
+            wait_10s = WebDriverWait(self.driver, 10)
+            wait_10s.until(
+                lambda d: 'upload-invoice' in d.current_url or
+                d.find_elements(By.XPATH, "//*[contains(text(), 'Upload Invoice')]")
             )
-            logger.info("✓ Found store name field")
-            store_field.clear()
-            store_field.send_keys(store_name)
-            logger.info(f"✓ Entered store name: {store_name}")
-
-            # Fill amount - find input within Amount container
-            # Convert amount to cents (ClassWallet stores amounts in cents)
-            amount_field = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//div[@data-test='Amount']//input[@type='text']"))
-            )
-            logger.info("✓ Found amount field")
-            amount_field.clear()
-            amount_cents = str(int(float(amount) * 100))
-            amount_field.send_keys(amount_cents)
-            logger.info(f"✓ Entered amount: ${amount} (${amount_cents} cents)")
-
-            # Click Next button - use data-test attribute
-            next_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='Next']"))
-            )
-            logger.info("✓ Found Next button")
-            next_button.click()
-            logger.info("✓ Clicked Next button")
-
-            time.sleep(1)
-
-            logger.info("✓ Reimbursement form completed!")
+            logger.info("✓ Landed on Upload Invoice step")
             return True
 
         except Exception as e:
@@ -492,560 +456,26 @@ class ClassWalletAutomation:
             logger.error(f"❌ Error handling image editor modal: {str(e)}")
             return False
 
-    def upload_files(self, file_paths: dict):
+    @staticmethod
+    def _normalize_category_name(category: str) -> str:
         """
-        Upload required files
+        Normalize an ESA Helper category name to match ClassWallet's exact category text.
 
-        Args:
-            file_paths: Dictionary of {file_type: file_path} OR {file_type: {name, path, size}}
-                       OR {file_type: [{name, path, size}, ...]} for multiple files
-
-        Returns:
-            bool: True if successful, False otherwise
+        Note: Form sends names like "Computer Hardware & Technological Devices" but
+        ClassWallet displays "Computer hardware and technological devices" (different
+        capitalization, "&" vs "and", hyphen vs en-dash).
         """
-        try:
-            logger.info(f"=== STEP 3: UPLOAD FILES ===")
-            logger.info(f"Processing {len(file_paths)} file types...")
-
-            if not file_paths:
-                logger.info("✓ No files to upload")
-                return True
-
-            # Extract file paths - handle string paths, single objects, and arrays of objects
-            files_to_upload = []
-            for file_type, file_data in file_paths.items():
-                # Handle array of files (new format from multiple file upload)
-                if isinstance(file_data, list):
-                    for idx, single_file in enumerate(file_data):
-                        # Extract path from file metadata object
-                        if isinstance(single_file, dict):
-                            file_path = single_file.get('path')
-                            file_name = single_file.get('name', 'unknown')
-                            if not file_path:
-                                logger.error(f"No path found in file metadata for {file_type}[{idx}]")
-                                return False
-                        else:
-                            # String path
-                            file_path = single_file
-                            file_name = Path(file_path).name
-
-                        if not Path(file_path).exists():
-                            logger.error(f"File not found: {file_path}")
-                            return False
-
-                        abs_path = str(Path(file_path).absolute())
-                        files_to_upload.append(abs_path)
-                        logger.info(f"✓ Found {file_type} #{idx+1}: {file_name}")
-
-                # Handle single file (old format - backward compatible)
-                else:
-                    # Check if file_data is a dict with metadata or just a string path
-                    if isinstance(file_data, dict):
-                        file_path = file_data.get('path')
-                        file_name = file_data.get('name', 'unknown')
-                        if not file_path:
-                            logger.error(f"No path found in file metadata for {file_type}")
-                            return False
-                    else:
-                        # String path
-                        file_path = file_data
-                        file_name = Path(file_path).name
-
-                    if not Path(file_path).exists():
-                        logger.error(f"File not found: {file_path}")
-                        return False
-
-                    abs_path = str(Path(file_path).absolute())
-                    files_to_upload.append(abs_path)
-                    logger.info(f"✓ Found {file_type}: {file_name}")
-
-            # Find the file input element (it's hidden but Selenium can interact with it)
-            logger.info("1. Locating file input element...")
-            file_input = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[@type='file']"))
-            )
-            logger.info("✓ Found file input element")
-
-            # Send file paths to the input
-            # Selenium can send files to hidden inputs
-            file_paths_string = '\n'.join(files_to_upload)
-            logger.info(f"2. Sending {len(files_to_upload)} file path(s)...")
-            file_input.send_keys(file_paths_string)
-            logger.info(f"✓ Sent file paths to input")
-
-            # Wait for files to be processed by ClassWallet
-            logger.info("3. Waiting for file upload processing...")
-            time.sleep(4)
-
-            logger.info("✓ Files uploaded successfully")
-
-            # Check for and handle image editor modal if it appears
-            logger.info("4. Checking for image editor modal...")
-            if not self.handle_image_editor_modal():
-                logger.error("❌ Failed to handle image editor modal")
-                return False
-
-            # Click Next button to proceed to next step
-            logger.info("5. Clicking Next button...")
-            next_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='Next']"))
-            )
-            next_button.click()
-            logger.info("✓ Next button clicked")
-
-            time.sleep(2)
-
-            return True
-
-        except Exception as e:
-            self._log_error_with_context("Upload Files", e)
-            return False
-
-    def select_expense_category(self, category: str):
-        """
-        Select purse (Arizona - ESA) and expense category
-
-        Args:
-            category: Expense category name
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            logger.info(f"=== STEP 4: SELECT PURSE AND CATEGORY ===")
-            logger.info(f"Category: {category}")
-
-            # Wait for page to be fully loaded and any upload notifications to disappear
-            # The upload process may have triggered notifications that need time to clear
-            logger.info("0. Waiting for page to stabilize after file uploads...")
-            time.sleep(3)  # Wait for uploads to complete and notifications to clear
-
-            # Wait for the page body to be present (ensures navigation is complete)
-            self.wait.until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-            logger.info("✓ Page loaded and ready")
-
-            # Step 1: Select Arizona - ESA checkbox
-            logger.info("1. Selecting Arizona - ESA purse...")
-
-            # Try multiple selectors for the ESA checkbox
-            # The checkbox is a span with MUI styling (MuiCheckbox-root), not a button
-            esa_checkbox = None
-            selectors = [
-                # First try: span with data-test attribute (most specific)
-                (By.CSS_SELECTOR, "span[data-test='Arizona - ESA'][aria-label='Arizona - ESA']"),
-                # Second try: span with MuiCheckbox-root class and data-test
-                (By.XPATH, "//span[@data-test='Arizona - ESA' and contains(@class, 'MuiCheckbox-root')]"),
-                # Third try: input checkbox directly
-                (By.XPATH, "//input[@type='checkbox'][@value='5de682872a2f835d4a700e9d']"),
-                # Fallback: any span with Arizona - ESA aria-label
-                (By.XPATH, "//span[@aria-label='Arizona - ESA']"),
-            ]
-
-            for selector in selectors:
-                try:
-                    esa_checkbox = self.wait.until(
-                        EC.element_to_be_clickable(selector)
-                    )
-                    logger.info(f"✓ Found ESA checkbox using selector: {selector}")
-                    break
-                except:
-                    logger.debug(f"Selector not found: {selector}")
-                    continue
-
-            if not esa_checkbox:
-                logger.error("❌ Could not find Arizona - ESA checkbox with any selector")
-                # Wait a bit and try broader search
-                time.sleep(2)
-                try:
-                    # Look for any element containing "Arizona" in aria-label
-                    esa_checkbox = self.driver.find_element(
-                        By.XPATH,
-                        "//*[contains(@aria-label, 'Arizona')][@data-test='Arizona - ESA']"
-                    )
-                    logger.info("✓ Found ESA checkbox after wait")
-                except:
-                    logger.error("Failed to find ESA checkbox - page may have changed")
-                    logger.info("Dumping page source for debugging...")
-                    logger.info(self.driver.page_source[:2000])
-                    return False
-
-            # Check if already selected by looking at the parent's class
-            try:
-                if "Mui-checked" not in esa_checkbox.get_attribute("class"):
-                    esa_checkbox.click()
-                    logger.info("✓ Arizona - ESA checkbox clicked")
-                else:
-                    logger.info("✓ Arizona - ESA already selected")
-            except Exception as e:
-                logger.error(f"Error clicking ESA checkbox: {str(e)}")
-                return False
-
-            time.sleep(2)  # Extended wait for category list to load
-
-            # Step 2: Select expense category
-            logger.info(f"2. Selecting expense category: {category}...")
-
-            # Note: Category names from the form may differ from ClassWallet's exact format:
-            # Form sends: "Computer Hardware & Technological Devices"
-            # ClassWallet has: "Computer hardware and technological devices"
-            # Form sends: "Tutoring & Teaching Services - Accredited Individual"
-            # ClassWallet has: "Tutoring and teaching Services – Accredited Individual"
-            # (different: & vs "and", capitalization, en-dash vs hyphen)
-
-            # Normalize the category name to match ClassWallet's format
-            # ClassWallet uses specific capitalization patterns:
-            # "Computer Hardware & Technological Devices" → "Computer hardware and technological devices"
-            # "Tutoring & Teaching Services" → "Tutoring and teaching Services" (Services capitalized)
-
-            # First, do the specific replacements for known patterns
-            if category.startswith("Computer Hardware"):
-                # Computer Hardware category: all words after "Computer" are lowercase
-                category_normalized = "Computer hardware and technological devices"
-            elif category == "School Tuition":
-                # Form label "School Tuition" maps to ClassWallet's full category text
-                category_normalized = "Tuition, textbooks or fees at a qualified school"
-            elif "Tutoring" in category and "Teaching" in category:
-                # Tutoring categories: replace & with "and", but keep Services capitalized
-                category_normalized = category.replace(" & ", " and ").replace("&", "and")
-                category_normalized = category_normalized.replace("and Teaching", "and teaching")
-                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
-            else:
-                # Generic normalization for other categories
-                category_normalized = category.replace(" & ", " and ").replace("&", "and")
-                category_normalized = category_normalized.replace(" - ", " – ")  # Convert hyphen to en-dash
-
-            logger.debug(f"Original category: {category}")
-            logger.debug(f"Normalized category: {category_normalized}")
-
-            # Find the category checkbox by its data-test attribute
-            # Categories are in divs with nested Material-UI checkbox spans
-            category_checkbox = None
-            category_selectors = [
-                # Priority 1: Find the span.MuiCheckbox-root inside a div[data-test] with exact match
-                (By.XPATH, f"//div[@data-test='{category}']//span[contains(@class, 'MuiCheckbox-root')]"),
-                # Priority 2: Find the span.MuiCheckbox-root inside a div[data-test] with normalized
-                (By.XPATH, f"//div[@data-test='{category_normalized}']//span[contains(@class, 'MuiCheckbox-root')]"),
-                # Priority 3: Try CSS selector for div then we'll target span inside
-                (By.CSS_SELECTOR, f"div[data-test='{category}']"),
-                # Priority 4: Try with normalized name
-                (By.CSS_SELECTOR, f"div[data-test='{category_normalized}']"),
-                # Priority 5: Try via aria-label with exact match
-                (By.XPATH, f"//span[@aria-label='{category}']"),
-                # Priority 6: Try via aria-label with normalized
-                (By.XPATH, f"//span[@aria-label='{category_normalized}']"),
-                # Priority 7: Try finding span with parent containing category text (flexible)
-                (By.XPATH, f"//span[contains(@class, 'MuiCheckbox-root')][ancestor::div[contains(., '{category}')]]"),
-                # Priority 8: Try normalized version
-                (By.XPATH, f"//span[contains(@class, 'MuiCheckbox-root')][ancestor::div[contains(., '{category_normalized}')]]"),
-            ]
-
-            for idx, selector in enumerate(category_selectors):
-                try:
-                    logger.info(f"Trying selector {idx+1}/{len(category_selectors)}: {selector}")
-                    # First, just find the element (don't require it to be clickable)
-                    # We'll handle clicking separately
-                    short_wait = WebDriverWait(self.driver, 3)
-                    category_checkbox = short_wait.until(
-                        EC.presence_of_element_located(selector)
-                    )
-                    logger.info(f"✓ Found category element using selector {idx+1}: {selector}")
-                    break
-                except Exception as e:
-                    logger.info(f"  Selector {idx+1} failed: {type(e).__name__}")
-                    continue
-
-            if not category_checkbox:
-                logger.error(f"❌ Could not find category '{category}' checkbox with any selector")
-                logger.info("Attempted selectors:")
-                for idx, selector in enumerate(category_selectors):
-                    logger.info(f"  {idx+1}. {selector}")
-
-                # Try to find all divs with data-test to help debugging
-                try:
-                    all_categories = self.driver.find_elements(By.XPATH, "//div[@data-test]")
-                    logger.info(f"Found {len(all_categories)} elements with data-test attribute:")
-                    # Log ALL categories, not just first 15
-                    for idx, elem in enumerate(all_categories):
-                        data_test = elem.get_attribute("data-test")
-                        logger.info(f"  {idx+1}. data-test='{data_test}'")
-                except Exception as debug_error:
-                    logger.debug(f"Could not list available categories: {str(debug_error)}")
-
-                # Also try to find the categories container and dump its HTML
-                try:
-                    categories_container = self.driver.find_element(By.XPATH, "//div[@data-test='categories']")
-                    logger.info("Found categories container, dumping inner HTML:")
-                    inner_html = categories_container.get_attribute("innerHTML")
-                    logger.info(inner_html[:2000])  # Log first 2000 chars
-                except Exception as container_error:
-                    logger.debug(f"Could not find categories container: {str(container_error)}")
-
-                logger.info("Dumping page source for debugging...")
-                logger.info(self.driver.page_source[:3000])
-                return False
-
-            # If we got a div, find the span inside it
-            click_target = category_checkbox
-            is_div = category_checkbox.tag_name == "div"
-            if is_div:
-                try:
-                    click_target = category_checkbox.find_element(By.XPATH, ".//span[contains(@class, 'MuiCheckbox-root')]")
-                    logger.info("✓ Found MuiCheckbox-root span inside div")
-                except:
-                    logger.warning("⚠️ Could not find span inside div, will try to click div directly")
-                    click_target = category_checkbox
-
-            # Check if already selected by looking at the parent span or div
-            check_element = click_target if not is_div else category_checkbox
-            try:
-                is_checked = "Mui-checked" in check_element.get_attribute("class")
-            except:
-                is_checked = False
-
-            if not is_checked:
-                # Scroll element into view first
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", click_target)
-                time.sleep(0.5)
-
-                # Try clicking the element first (but use JavaScript click to avoid interception issues)
-                click_succeeded = False
-                try:
-                    logger.info(f"Attempting to click category element...")
-                    # Use JavaScript click instead of Selenium click to avoid element interception
-                    self.driver.execute_script("arguments[0].click();", click_target)
-                    logger.info(f"✓ Category '{category}' clicked (JavaScript)")
-                    time.sleep(1)  # Wait for UI to update
-
-                    # Check if it worked
-                    try:
-                        is_checked = "Mui-checked" in check_element.get_attribute("class")
-                    except:
-                        is_checked = False
-
-                    if is_checked:
-                        logger.info(f"✓ Category '{category}' successfully selected")
-                        click_succeeded = True
-                    else:
-                        logger.warning(f"⚠️ JavaScript click didn't select category, trying input element...")
-                except Exception as click_error:
-                    logger.warning(f"JavaScript click failed: {str(click_error)}")
-
-                # If JavaScript click didn't work, try clicking the input directly
-                if not click_succeeded:
-                    try:
-                        # Find input relative to our click target
-                        input_elem = click_target.find_element(By.TAG_NAME, "input") if not is_div else category_checkbox.find_element(By.TAG_NAME, "input")
-                        logger.info(f"Found input element, attempting JavaScript click...")
-                        self.driver.execute_script("arguments[0].click();", input_elem)
-                        logger.info(f"✓ Category '{category}' input clicked (JavaScript)")
-                        time.sleep(1)
-
-                        # Verify it worked
-                        try:
-                            is_checked = "Mui-checked" in check_element.get_attribute("class")
-                        except:
-                            is_checked = False
-
-                        if is_checked:
-                            logger.info(f"✓ Category '{category}' successfully selected")
-                            click_succeeded = True
-                        else:
-                            logger.warning(f"⚠️ Input click didn't work either, trying direct checkbox set...")
-                            # Last resort: use JavaScript to directly set checkbox
-                            self.driver.execute_script("arguments[0].checked = true;", input_elem)
-                            # Trigger change event
-                            self.driver.execute_script("""
-                                var event = new Event('change', { bubbles: true });
-                                arguments[0].dispatchEvent(event);
-                            """, input_elem)
-                            logger.info(f"✓ Category '{category}' set via JavaScript")
-                            time.sleep(1)
-                    except Exception as input_error:
-                        logger.error(f"Failed to click input: {str(input_error)}")
-                        return False
-            else:
-                logger.info(f"✓ Category '{category}' already selected")
-
-            time.sleep(1)
-
-            # Step 3: Click Next button
-            logger.info("3. Clicking Next button...")
-            next_button = self.wait.until(
-                EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='Next']"))
-            )
-            next_button.click()
-            logger.info("✓ Next button clicked")
-
-            time.sleep(2)
-
-            logger.info("✓ Purse and category selection complete")
-            return True
-
-        except Exception as e:
-            self._log_error_with_context("Select Expense Category", e)
-            return False
-
-    def fill_po_and_comment(self, po_number: str, comment: str, auto_submit: bool = False):
-        """
-        Fill PO number and comment on review page
-
-        Args:
-            po_number: Purchase order number
-            comment: Comment text
-            auto_submit: If True, click Next to proceed to final submission. If False, stop after filling fields.
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            logger.info(f"=== STEP 5: FILL PO AND COMMENT ===")
-            logger.info(f"PO Number: {po_number}")
-            logger.info(f"Comment: {comment}")
-
-            time.sleep(1)  # Wait for page to be ready
-
-            # Fill PO number field
-            # PO Number field uses aria-label instead of id
-            logger.info("1. Locating PO number field...")
-            po_field = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//input[@aria-label='PO Number']"))
-            )
-            logger.info("✓ Found PO number field")
-            po_field.clear()
-            po_field.send_keys(po_number)
-            logger.info(f"✓ Entered PO number: {po_number}")
-
-            time.sleep(0.5)
-
-            # Fill comment field
-            # Comments field uses aria-label instead of id
-            logger.info("2. Locating comment field...")
-            comment_field = self.wait.until(
-                EC.presence_of_element_located((By.XPATH, "//textarea[@aria-label='Comments']"))
-            )
-            logger.info("✓ Found comment field")
-            comment_field.clear()
-            comment_field.send_keys(comment)
-            logger.info(f"✓ Entered comment: {comment}")
-
-            time.sleep(0.5)
-
-            # Only click Next if auto_submit is enabled
-            if auto_submit:
-                # Click Next button to proceed to final submission
-                logger.info("3. Clicking Next button to proceed to final submission...")
-                next_button = self.wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='Next']"))
-                )
-                next_button.click()
-                logger.info("✓ Next button clicked")
-
-                time.sleep(2)
-            else:
-                logger.info("3. Auto-submit disabled. Stopping after form fill for manual review.")
-
-            logger.info("✓ PO and comment filled successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Error filling PO and comment: {str(e)}")
-            logger.error(f"Full traceback:", exc_info=True)
-            return False
-
-    def fill_direct_pay_additional_info(self, po_number: str = None, comment: str = None) -> bool:
-        """
-        Fill in additional info for Direct Pay (comments and invoice/quote number).
-        This is step 5 in the Direct Pay workflow - different from reimbursement.
-
-        Args:
-            po_number: PO or invoice number (optional)
-            comment: Comments or description (optional)
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            logger.info(f"=== STEP 5: FILL DIRECT PAY ADDITIONAL INFO ===")
-            if po_number:
-                logger.info(f"Invoice/Quote Number: {po_number}")
-            if comment:
-                logger.info(f"Comments: {comment}")
-
-            time.sleep(1)  # Wait for page to be ready
-
-            # Fill comments field (optional for Direct Pay)
-            if comment:
-                try:
-                    logger.info("1. Locating comments field...")
-                    wait_5s = WebDriverWait(self.driver, 5)
-                    comments_field = wait_5s.until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "span[data-test-type='comments'] textarea"))
-                    )
-                    logger.info("✓ Found comments field")
-                    comments_field.clear()
-                    comments_field.send_keys(comment)
-                    logger.info(f"✓ Entered comments: {comment}")
-                except Exception as e:
-                    logger.warning(f"Could not fill comments field (optional): {str(e)}")
-                    # Comments are optional, so don't fail
-
-            time.sleep(0.5)
-
-            # Fill invoice/quote number field (optional for Direct Pay)
-            if po_number:
-                try:
-                    logger.info("2. Locating invoice/quote number field...")
-                    wait_5s = WebDriverWait(self.driver, 5)
-                    invoice_field = wait_5s.until(
-                        EC.presence_of_element_located((By.CSS_SELECTOR, "span[data-test-type='invoice-or-quote'] input"))
-                    )
-                    logger.info("✓ Found invoice/quote number field")
-                    invoice_field.clear()
-                    invoice_field.send_keys(po_number)
-                    logger.info(f"✓ Entered invoice/quote number: {po_number}")
-                except Exception as e:
-                    logger.warning(f"Could not fill invoice/quote number field (optional): {str(e)}")
-                    # Invoice number is optional, so don't fail
-
-            time.sleep(0.5)
-
-            logger.info("✓ Direct Pay additional info filled successfully")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Error filling Direct Pay additional info: {str(e)}")
-            logger.error(f"Full traceback:", exc_info=True)
-            return False
-
-    def proceed_direct_pay_to_review(self) -> bool:
-        """
-        Click Next button to proceed from Additional info to Review page.
-        This is step 5b in the Direct Pay workflow.
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            logger.info("=== STEP 5B: PROCEED TO REVIEW PAGE ===")
-            logger.info("Clicking Next to proceed to Review...")
-
-            wait_5s = WebDriverWait(self.driver, 5)
-            next_button = wait_5s.until(
-                EC.element_to_be_clickable((By.ID, "next"))
-            )
-            next_button.click()
-            logger.info("✓ Next button clicked - proceeding to Review page")
-
-            time.sleep(2)  # Wait for Review page to load
-            logger.info("✓ Ready to review submission")
-            return True
-
-        except Exception as e:
-            logger.error(f"❌ Error proceeding to review: {str(e)}")
-            self._log_error_with_context("proceed_to_review", e)
-            return False
+        if category.startswith("Computer Hardware"):
+            return "Computer hardware and technological devices"
+        elif category == "School Tuition":
+            return "Tuition, textbooks or fees at a qualified school"
+        elif "Tutoring" in category and "Teaching" in category:
+            normalized = category.replace(" & ", " and ").replace("&", "and")
+            normalized = normalized.replace("and Teaching", "and teaching")
+            return normalized.replace(" - ", " – ")
+        else:
+            normalized = category.replace(" & ", " and ").replace("&", "and")
+            return normalized.replace(" - ", " – ")
 
     def wait_for_submission_confirmation(self, timeout: int = 15) -> dict:
         """
@@ -1142,68 +572,17 @@ class ClassWalletAutomation:
                 'error': True
             }
 
-    def submit_reimbursement(self, wait_for_confirmation: bool = True):
+    def start_direct_pay(self, vendor_name: str, search_term: str = None):
         """
-        Submit the reimbursement request on final review page
+        Start a new direct pay submission: click Pay, search for and select the vendor.
 
-        Args:
-            wait_for_confirmation: If True, wait for ClassWallet to confirm submission
-
-        Returns:
-            dict or bool: If wait_for_confirmation=True, returns confirmation dict.
-                         If wait_for_confirmation=False, returns True/False
-        """
-        try:
-            logger.info(f"=== STEP 6: SUBMIT REIMBURSEMENT ===")
-
-            time.sleep(1)  # Wait for page to be ready
-
-            # Look for the final submit button on the review page
-            # NOTE: Selectors need to be updated based on actual ClassWallet HTML
-            logger.info("1. Locating submit button...")
-
-            # Try multiple possible button selectors for the submit action
-            submit_button = None
-            try:
-                # First try: data-test attribute
-                submit_button = self.wait.until(
-                    EC.element_to_be_clickable((By.CSS_SELECTOR, "button[data-test='Submit']"))
-                )
-            except:
-                try:
-                    # Second try: text content
-                    submit_button = self.wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Submit')]"))
-                    )
-                except:
-                    # Third try: aria-label
-                    submit_button = self.wait.until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[@aria-label='Submit']"))
-                    )
-
-            logger.info("✓ Found submit button")
-            submit_button.click()
-            logger.info("✓ Submit button clicked")
-
-            # Wait for confirmation if requested
-            if wait_for_confirmation:
-                return self.wait_for_submission_confirmation()
-            else:
-                time.sleep(2)  # Wait for submission to complete
-                logger.info("✓ Reimbursement submitted")
-                return True
-
-        except Exception as e:
-            self._log_error_with_context("Submit Reimbursement", e)
-            return {'success': False, 'error': True, 'message': str(e)} if wait_for_confirmation else False
-
-    def start_direct_pay(self, vendor_name: str, amount: str, search_term: str = None):
-        """
-        Start a new direct pay submission
+        As of the ClassWallet 2026/2027 platform update, selecting a vendor lands directly
+        on the "Upload Invoice" step of a new 4-step wizard (Upload Invoice -> Manage
+        Expenses -> Select Purse -> Review & Submit). Amount entry now happens in
+        fill_direct_pay_expenses() (step 2), not here.
 
         Args:
             vendor_name: Name of the vendor to pay (display name)
-            amount: Payment amount
             search_term: Exact search term for vendor lookup (optional, uses vendor_name if not provided)
 
         Returns:
@@ -1214,7 +593,6 @@ class ClassWalletAutomation:
             logger.info("STEP 2: START DIRECT PAY")
             logger.info("=" * 60)
             logger.info(f"Vendor: {vendor_name}")
-            logger.info(f"Amount: ${amount}")
 
             # Use search_term if provided, otherwise fallback to vendor_name
             search_query = search_term or vendor_name
@@ -1374,74 +752,22 @@ class ClassWalletAutomation:
 
             time.sleep(1)
 
-            # Note: Step 4 (confirming vendor selection) may already be complete from clicking Pay in step 3
-            # Only try to click another Pay button if the amount field hasn't appeared yet
-            logger.info("4. Checking if vendor was selected...")
+            # Confirm we landed on step 1 of the wizard ("Upload Invoice") - vendor
+            # selection navigates straight there, no separate confirmation click needed.
+            logger.info("4. Waiting for 'Upload Invoice' step to load...")
             try:
-                # Try to find the amount field - if it exists, vendor was already selected
-                amount_field_check = self.driver.find_elements(By.NAME, "amount")
-                if not amount_field_check:
-                    # Amount field not found, try clicking another Pay button to confirm
-                    logger.info("Amount field not found, attempting to confirm vendor selection...")
-                    try:
-                        select_vendor_button = self.wait.until(
-                            EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Pay')]")),
-                            timeout=3
-                        )
-                        select_vendor_button.click()
-                        logger.info("✓ Vendor confirmed with additional Pay button click")
-                    except:
-                        logger.info("No additional confirmation button needed")
-                else:
-                    logger.info("✓ Vendor already selected (amount field is visible)")
-            except Exception as e:
-                logger.warning(f"Could not verify vendor selection: {str(e)}")
-                # Don't fail here - continue to next step
-
-            time.sleep(1)
-
-            # Fill amount - Direct Pay uses decimal format, not cents
-            logger.info("5. Entering payment amount...")
-            try:
-                wait_5s = WebDriverWait(self.driver, 5)
-                amount_field = wait_5s.until(
-                    EC.presence_of_element_located((By.ID, "amount"))
+                wait_10s = WebDriverWait(self.driver, 10)
+                wait_10s.until(
+                    lambda d: 'upload-invoice' in d.current_url or
+                    d.find_elements(By.XPATH, "//*[contains(text(), 'Upload Invoice')]")
                 )
-                amount_field.clear()
-                amount_field.send_keys(str(amount))
-                logger.info(f"✓ Entered amount: ${amount}")
+                logger.info("✓ Landed on Upload Invoice step")
             except Exception as e:
-                logger.error(f"Could not enter payment amount: {str(e)}")
-                self._log_error_with_context("enter_amount", e)
+                logger.error(f"Did not reach the Upload Invoice step after selecting vendor: {str(e)}")
+                self._log_error_with_context("start_direct_pay", e)
                 return False
 
-            time.sleep(0.5)
-
-            # Click Next to proceed
-            logger.info("6. Clicking Next button...")
-            try:
-                wait_5s = WebDriverWait(self.driver, 5)
-                next_button = wait_5s.until(
-                    EC.element_to_be_clickable((By.ID, "next"))
-                )
-                next_button.click()
-                logger.info("✓ Next button clicked")
-            except Exception as e:
-                logger.error(f"Could not click Next button: {str(e)}")
-                self._log_error_with_context("click_next", e)
-                return False
-
-            time.sleep(2)  # Wait for next page to load
-
-            # The workflow continues with:
-            # 7. Upload Documents (if required)
-            # 8. Choose Purses (select ESA account)
-            # 9. Additional info (comments, PO number)
-            # 10. Review & Submit
-
-            # For now, return here - next steps handled by submit_direct_pay()
-            logger.info("✓ Direct pay form started and amount entered successfully")
-            logger.info("✓ Ready to proceed with remaining workflow steps")
+            logger.info("✓ Vendor selected, ready for invoice upload")
             return True
 
         except Exception as e:
@@ -1450,10 +776,760 @@ class ClassWalletAutomation:
             self._log_error_with_context("start_direct_pay", e)
             return False
 
-    def submit_direct_pay(self, wait_for_confirmation: bool = True):
+    def upload_wizard_invoice(self, file_paths: dict) -> bool:
         """
-        Submit the direct pay request from Review page.
-        Clicks Next button to proceed to submission.
+        Step 1 of the new Direct Pay wizard ("Upload Invoice"): upload the invoice file(s),
+        then handle ClassWallet's Intelligent Document Processing (IDP) scan, which replaced
+        the old "resize/rotate -> Save" image editor modal with a "Scan Receipt" button
+        (same underlying data-test='Save' selector - see handle_image_editor_modal()).
+        Scanning auto-advances to step 2 ("Manage Expenses") when done.
+
+        Args:
+            file_paths: Dictionary of {file_type: file_path} OR {file_type: {name, path, size}}
+                       OR {file_type: [{name, path, size}, ...]} for multiple files.
+                       Expected to contain the primary invoice file(s) only.
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("=== STEP 3: UPLOAD INVOICE ===")
+
+            if not file_paths:
+                logger.error("No invoice file provided - ClassWallet's Direct Pay wizard "
+                              "requires an invoice upload on step 1 to proceed")
+                return False
+
+            files_to_upload = self._extract_file_paths(file_paths)
+            if files_to_upload is None:
+                return False
+
+            logger.info("1. Locating file input element...")
+            file_input = self.wait.until(
+                EC.presence_of_element_located((By.XPATH, "//input[@type='file']"))
+            )
+            logger.info("✓ Found file input element")
+
+            file_paths_string = '\n'.join(files_to_upload)
+            logger.info(f"2. Sending {len(files_to_upload)} file path(s)...")
+            file_input.send_keys(file_paths_string)
+            logger.info("✓ Sent file paths to input")
+
+            time.sleep(2)  # Let the upload register before the editor/scan modal appears
+
+            # Handle the resize/rotate -> "Scan Receipt" modal (one per uploaded image)
+            logger.info("3. Checking for image editor / Scan Receipt modal...")
+            if not self.handle_image_editor_modal():
+                logger.error("❌ Failed to handle image editor / Scan Receipt modal")
+                return False
+
+            # IDP scanning takes a few seconds and auto-advances to step 2 when done
+            logger.info("4. Waiting for Intelligent Document Processing (IDP) scan to complete...")
+            try:
+                wait_30s = WebDriverWait(self.driver, 30)
+                wait_30s.until(lambda d: 'manage-expenses' in d.current_url)
+                logger.info("✓ IDP scan complete, landed on Manage Expenses step")
+            except Exception as e:
+                logger.error(f"Did not reach Manage Expenses step after upload: {str(e)}")
+                self._log_error_with_context("upload_wizard_invoice", e)
+                return False
+
+            logger.info("✓ Invoice uploaded and scanned successfully")
+            return True
+
+        except Exception as e:
+            self._log_error_with_context("Upload Direct Pay Invoice", e)
+            return False
+
+    def _force_set_field_value(self, element, value: str):
+        """
+        Robustly overwrite a (possibly masked/controlled) input's value.
+
+        element.clear() sets the DOM value directly, bypassing whatever mask/React
+        controlled-input logic tracks the field's real internal state. On ClassWallet's
+        Manage Expenses page this means clear() looks like it worked but doesn't reset the
+        mask's internal state, so the next send_keys() gets inserted alongside the old
+        value instead of replacing it (a pre-filled $2,047.50 became $2,047,502,089.29
+        after "overwriting" with 200.85). Selecting the text and deleting it via real
+        keystrokes fixes this because the mask sees real key events and updates its
+        internal state accordingly.
+        """
+        # Scroll into view and wait for clickability first - a field can be momentarily
+        # unclickable right after a preceding dialog closes (its backdrop/transition hasn't
+        # finished yet), which raises ElementNotInteractableException on a bare .click().
+        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", element)
+        WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable(element))
+
+        element.click()
+        select_all_key = Keys.COMMAND if platform.system() == 'Darwin' else Keys.CONTROL
+        for _ in range(5):
+            current = (element.get_attribute('value') or '').strip()
+            if not current:
+                break
+            element.send_keys(select_all_key, 'a')
+            element.send_keys(Keys.DELETE)
+        element.send_keys(str(value))
+
+    def _extract_file_paths(self, file_paths: dict):
+        """
+        Flatten the {file_type: path | {name,path,size} | [{...}, ...]} structure used
+        throughout the app into a plain list of absolute file paths. Returns None (and
+        logs an error) if any referenced file doesn't exist.
+        """
+        files_to_upload = []
+        for file_type, file_data in file_paths.items():
+            entries = file_data if isinstance(file_data, list) else [file_data]
+            for idx, single_file in enumerate(entries):
+                if isinstance(single_file, dict):
+                    file_path = single_file.get('path')
+                    file_name = single_file.get('name', 'unknown')
+                    if not file_path:
+                        logger.error(f"No path found in file metadata for {file_type}[{idx}]")
+                        return None
+                else:
+                    file_path = single_file
+                    file_name = Path(file_path).name
+
+                if not Path(file_path).exists():
+                    logger.error(f"File not found: {file_path}")
+                    return None
+
+                files_to_upload.append(str(Path(file_path).absolute()))
+                logger.info(f"✓ Found {file_type}: {file_name}")
+
+        return files_to_upload
+
+    def _close_date_picker(self, cancel: bool) -> None:
+        """
+        Close the MUI calendar-picker dialog that opens when the Transaction Date field is
+        clicked, via its Cancel or OK button. Falls back to Escape if no button is found
+        (e.g. the dialog already auto-closed after a day was selected). Never raises - this
+        is only ever used to make sure we don't leave a modal open blocking the page.
+        """
+        button_text = 'cancel' if cancel else 'ok'
+        try:
+            button = WebDriverWait(self.driver, 3).until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//div[contains(@class,'MuiDialog-root') or @role='dialog']"
+                    "//button[translate(normalize-space(.), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                    f"'abcdefghijklmnopqrstuvwxyz')='{button_text}']"
+                ))
+            )
+            button.click()
+        except Exception:
+            try:
+                self.driver.find_element(By.TAG_NAME, "body").send_keys(Keys.ESCAPE)
+            except Exception:
+                pass
+
+        # Let the dialog's close transition/backdrop finish before the caller interacts with
+        # anything else on the page (a click right after this raised ElementNotInteractable
+        # on the next field in testing).
+        time.sleep(0.5)
+
+    def _fill_transaction_date_if_needed(self) -> None:
+        """
+        Leave ClassWallet's IDP-scanned transaction date alone if it's today or earlier
+        (a valid past transaction date). Otherwise - blank, unparseable, or in the future
+        (which a misread scan can produce) - try to set it to today's date. Never fails the
+        overall step: the date field isn't required, so any error here is logged and
+        swallowed, leaving the scanned value in place.
+
+        This field is a MUI calendar-picker dialog, not a free-text input - clicking it
+        opens a modal with a day grid and Clear/Cancel/OK buttons, so it can't be overwritten
+        by typing like the other fields. Only the case where today's date is visible in the
+        currently-displayed month (the common case, since it opens showing the scanned
+        date's month) is handled by clicking that day; anything less certain falls back to
+        Cancel, leaving the scanned date untouched, rather than risk leaving the modal open
+        or picking the wrong date.
+        """
+        try:
+            date_field = self.driver.find_element(By.CSS_SELECTOR, "input[aria-label='Transaction date']")
+        except Exception as e:
+            logger.warning(f"Could not locate Transaction date field (optional): {str(e)}")
+            return
+
+        current_value = (date_field.get_attribute("value") or "").strip()
+        use_today = True
+        if current_value:
+            try:
+                scanned_date = datetime.strptime(current_value, "%m/%d/%Y")
+                if scanned_date.date() <= datetime.now().date():
+                    use_today = False
+            except ValueError:
+                logger.warning(f"Could not parse scanned transaction date '{current_value}', defaulting to today")
+
+        if not use_today:
+            logger.info(f"✓ Keeping scanned transaction date '{current_value}' (today or earlier)")
+            return
+
+        logger.info(f"Transaction date scanned as '{current_value or '(blank)'}' (future or unreadable) "
+                    "-> attempting to set to today via calendar picker")
+        try:
+            date_field.click()
+            time.sleep(0.5)
+
+            today = datetime.now()
+            month_year_label = today.strftime("%B %Y")  # e.g. "July 2026"
+
+            dialog_shows_current_month = self.driver.execute_script("""
+                const target = arguments[0].toLowerCase();
+                const dialog = document.querySelector('.MuiDialog-root, [role="dialog"]');
+                return !!dialog && dialog.textContent.toLowerCase().includes(target);
+            """, month_year_label)
+
+            if not dialog_shows_current_month:
+                logger.warning("Date picker isn't showing the current month - leaving scanned date as-is "
+                                "rather than navigating the calendar")
+                self._close_date_picker(cancel=True)
+                return
+
+            clicked = self.driver.execute_script("""
+                const target = arguments[0];
+                const dialog = document.querySelector('.MuiDialog-root, [role="dialog"]');
+                if (!dialog) return false;
+                const match = Array.from(dialog.querySelectorAll('button')).find(b =>
+                    b.textContent.trim() === target && !b.disabled && !b.className.includes('Mui-disabled')
+                );
+                if (match) { match.click(); return true; }
+                return false;
+            """, str(today.day))
+
+            if not clicked:
+                logger.warning(f"Could not find today's date ({today.day}) in the calendar picker")
+                self._close_date_picker(cancel=True)
+                return
+
+            time.sleep(0.3)
+            self._close_date_picker(cancel=False)
+            logger.info("✓ Transaction date set to today via calendar picker")
+
+        except Exception as e:
+            logger.warning(f"Could not set Transaction date via calendar picker, leaving as-is: {str(e)}")
+            self._close_date_picker(cancel=True)
+
+    def fill_direct_pay_expenses(self, vendor_name: str, amount: str, category: str,
+                                  student_name: str = None, po_number: str = None,
+                                  additional_files: dict = None) -> bool:
+        """
+        Step 2 of the new Direct Pay wizard ("Manage Expenses"). IDP pre-fills what it can
+        from the scanned invoice (vendor, transaction date, invoice number, line-item
+        description/price), which is unreliable enough (or in "User Name"'s case, never
+        populated at all) that each field is handled per its own rule:
+          - Vendor, User Name, line-item amount: always overwritten with ESA Helper's
+            known values, regardless of what IDP scanned.
+          - Invoice/quote number: keep whatever IDP scanned if present; only fill it with
+            ESA Helper's po_number if IDP left it blank.
+          - Transaction date: keep IDP's scanned date if it's today or earlier; otherwise
+            (blank, unparseable, or in the future) overwrite with today's date.
+        All overwrites use _force_set_field_value() instead of clear()+send_keys(), because
+        clear() doesn't reset these masked/controlled inputs' internal state - the next
+        keystrokes get inserted alongside the old value instead of replacing it (this is
+        exactly how a pre-filled $2,047.50 became $2,047,502,089.29 the first time around).
+
+        Note: only single line-item submissions are supported for now (rows[0]) - ESA
+        Helper's own form doesn't yet model multiple line items per submission.
+
+        Args:
+            vendor_name: Known vendor name to overwrite the "Vendor" field with
+            amount: Payment amount (used for the line item's unit price)
+            category: Expense category (ESA Helper's name - normalized to ClassWallet's text)
+            student_name: Known student name to overwrite the "User Name" field with
+            po_number: Invoice/quote number to fill in only if ClassWallet's scan left it blank
+            additional_files: Extra supporting files (e.g. curriculum) to upload via the
+                              separate "Additional Documentation" dropzone on this page
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("=== STEP 4: MANAGE EXPENSES ===")
+
+            logger.info(f"1. Overwriting Vendor field with: {vendor_name}")
+            try:
+                vendor_field = self.wait.until(
+                    EC.presence_of_element_located((By.NAME, "vendor"))
+                )
+                self._force_set_field_value(vendor_field, vendor_name)
+                logger.info("✓ Vendor field overwritten")
+            except Exception as e:
+                logger.error(f"Could not overwrite Vendor field: {str(e)}")
+                self._log_error_with_context("fill_direct_pay_expenses:vendor", e)
+                return False
+
+            if student_name:
+                logger.info(f"2. Overwriting Student/User Name with: {student_name}")
+                try:
+                    student_field = self.driver.find_element(By.NAME, "studentName")
+                    self._force_set_field_value(student_field, student_name)
+                    logger.info("✓ Student/User Name overwritten")
+                except Exception as e:
+                    logger.error(f"Could not overwrite Student/User Name field: {str(e)}")
+                    self._log_error_with_context("fill_direct_pay_expenses:student_name", e)
+                    return False
+
+            logger.info("3. Checking invoice/quote number...")
+            try:
+                po_field = self.driver.find_element(By.NAME, "poNumber")
+                scanned_po = (po_field.get_attribute("value") or "").strip()
+                if scanned_po:
+                    logger.info(f"✓ Keeping ClassWallet's scanned invoice number: '{scanned_po}'")
+                elif po_number:
+                    logger.info(f"Invoice number blank, filling with ESA Helper's: {po_number}")
+                    self._force_set_field_value(po_field, po_number)
+                    logger.info("✓ Invoice/quote number filled")
+            except Exception as e:
+                logger.warning(f"Could not check/fill invoice/quote number (optional): {str(e)}")
+
+            logger.info("4. Checking transaction date...")
+            self._fill_transaction_date_if_needed()
+
+            if not self._ensure_line_item_exists():
+                logger.error("❌ Could not create a line item to fill in")
+                return False
+
+            logger.info(f"5. Overwriting line item amount with: ${amount}")
+            try:
+                price_field = self.wait.until(
+                    EC.presence_of_element_located((By.NAME, "rows[0].price"))
+                )
+                self._force_set_field_value(price_field, str(amount))
+
+                qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
+                if not (qty_field.get_attribute("value") or "").strip():
+                    qty_field.send_keys("1")
+
+                description_field = self.driver.find_element(By.NAME, "rows[0].description")
+                if not (description_field.get_attribute("value") or "").strip():
+                    description_field.send_keys(category)
+
+                logger.info("✓ Line item amount overwritten")
+            except Exception as e:
+                logger.error(f"Could not set line item amount: {str(e)}")
+                self._log_error_with_context("fill_direct_pay_expenses:amount", e)
+                return False
+
+            logger.info(f"6. Selecting expense category: {category}...")
+            if not self._select_line_item_category(category):
+                logger.error(f"❌ Could not select expense category '{category}'")
+                return False
+
+            if additional_files:
+                logger.info("7. Uploading additional documentation...")
+                extra_paths = self._extract_file_paths(additional_files)
+                if extra_paths is None:
+                    return False
+                try:
+                    extra_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
+                    extra_input.send_keys('\n'.join(extra_paths))
+                    time.sleep(1)
+                    logger.info("✓ Additional documentation uploaded")
+                except Exception as e:
+                    logger.error(f"Could not upload additional documentation: {str(e)}")
+                    self._log_error_with_context("fill_direct_pay_expenses:additional_files", e)
+                    return False
+
+            logger.info("8. Clicking Continue...")
+            try:
+                continue_button = self.wait.until(
+                    EC.element_to_be_clickable((
+                        By.XPATH,
+                        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                        "'abcdefghijklmnopqrstuvwxyz'), 'continue')]"
+                    ))
+                )
+                continue_button.click()
+                logger.info("✓ Continue clicked")
+            except Exception as e:
+                logger.error(f"Could not click Continue: {str(e)}")
+                self._log_error_with_context("fill_direct_pay_expenses:continue", e)
+                return False
+
+            wait_10s = WebDriverWait(self.driver, 10)
+            wait_10s.until(lambda d: 'select-wallet' in d.current_url)
+            logger.info("✓ Manage Expenses complete, landed on Select Purse step")
+            return True
+
+        except Exception as e:
+            self._log_error_with_context("Fill Direct Pay Expenses", e)
+            return False
+
+    def _ensure_line_item_exists(self) -> bool:
+        """
+        Click "+ Add Expense" if IDP's scan produced zero line-item rows, so rows[0] exists
+        for the caller to fill in. Observed with a PDF receipt (Amazon order confirmation) -
+        unlike every JPG receipt tested, IDP scanning a PDF can land on Manage Expenses with
+        an empty Reimbursement/Direct Pay Details table instead of at least one row, since
+        PDFs also skip the resize/rotate "Scan Receipt" modal entirely. Does nothing if a
+        row already exists.
+
+        Returns:
+            bool: True if at least one row exists (already did, or was just added), False
+                  if a row still couldn't be created.
+        """
+        if self.driver.find_elements(By.NAME, "rows[0].price"):
+            return True
+
+        logger.info("No line items found after scan - clicking '+ Add Expense'")
+        try:
+            add_button = self.wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Add Expense')]"))
+            )
+            add_button.click()
+            self.wait.until(EC.presence_of_element_located((By.NAME, "rows[0].price")))
+            logger.info("✓ Added a line item row")
+            return True
+        except Exception as e:
+            logger.error(f"Could not add a line item row: {str(e)}")
+            return False
+
+    def _collapse_to_single_line_item(self) -> None:
+        """
+        Delete any line-item rows beyond the first (rows[0]), so exactly one remains.
+        IDP can split a multi-item receipt into several rows, but ESA Helper's Reimbursement
+        form only models a single lump-sum amount/category per submission - the rows are
+        collapsed rather than summed so the single remaining row can be fully overwritten.
+        Removes from the end (repeatedly clicking the last "Remove expense" button) to avoid
+        dealing with shifting row indices as rows are deleted.
+
+        Each deletion opens an "Are you sure you want to delete this item?" confirmation
+        dialog that must be confirmed via its "Yes, Delete Item" button before the row is
+        actually removed.
+        """
+        while True:
+            remove_buttons = self.driver.find_elements(By.XPATH, "//button[@aria-label='Remove expense']")
+            if len(remove_buttons) <= 1:
+                break
+            remove_buttons[-1].click()
+            time.sleep(0.3)
+
+            try:
+                confirm_button = WebDriverWait(self.driver, 3).until(
+                    EC.element_to_be_clickable((
+                        By.XPATH,
+                        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                        "'abcdefghijklmnopqrstuvwxyz'), 'yes, delete')]"
+                    ))
+                )
+                confirm_button.click()
+            except Exception:
+                logger.debug("No delete-confirmation dialog appeared - assuming row was removed directly")
+
+            time.sleep(0.5)
+
+    def fill_reimbursement_expenses(self, amount: str, category: str, comment: str = None,
+                                     vendor_name: str = None, po_number: str = None,
+                                     additional_files: dict = None) -> bool:
+        """
+        Step 2 of the Reimbursement wizard ("Manage Expenses") - the same page/component
+        Direct Pay uses, minus the "User Name" field (Reimbursement has no equivalent).
+
+        Unlike Direct Pay's single pre-existing line item, IDP can split a Reimbursement
+        receipt into multiple rows (one per purchased item); since ESA Helper's own form
+        only models one lump-sum amount/category per submission, any extra rows are deleted
+        and the remaining row is fully overwritten - amount, description (from ESA Helper's
+        comment), and category - rather than deferring to whatever IDP scanned. Shipping,
+        discount, and tax are always zeroed so the line item's total matches the submitted
+        amount exactly, regardless of what the scan picked up off the receipt.
+
+        Args:
+            amount: Reimbursement amount (used for the line item's unit price)
+            category: Expense category (ESA Helper's name - normalized to ClassWallet's text)
+            comment: ESA Helper's comment, used as the line item's description
+            vendor_name: Known store/vendor name to overwrite the "Vendor" field with (optional)
+            po_number: Invoice/quote number to fill in only if ClassWallet's scan left it blank
+            additional_files: Extra supporting files (e.g. curriculum) to upload via the
+                              separate "Additional Documentation" dropzone on this page
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("=== STEP 4: MANAGE EXPENSES (REIMBURSEMENT) ===")
+
+            if vendor_name:
+                logger.info(f"1. Overwriting Vendor field with: {vendor_name}")
+                try:
+                    vendor_field = self.wait.until(
+                        EC.presence_of_element_located((By.NAME, "vendor"))
+                    )
+                    self._force_set_field_value(vendor_field, vendor_name)
+                    logger.info("✓ Vendor field overwritten")
+                except Exception as e:
+                    logger.error(f"Could not overwrite Vendor field: {str(e)}")
+                    self._log_error_with_context("fill_reimbursement_expenses:vendor", e)
+                    return False
+
+            logger.info("2. Checking invoice/quote number...")
+            try:
+                po_field = self.driver.find_element(By.NAME, "poNumber")
+                scanned_po = (po_field.get_attribute("value") or "").strip()
+                if scanned_po:
+                    logger.info(f"✓ Keeping ClassWallet's scanned invoice number: '{scanned_po}'")
+                elif po_number:
+                    logger.info(f"Invoice number blank, filling with ESA Helper's: {po_number}")
+                    self._force_set_field_value(po_field, po_number)
+                    logger.info("✓ Invoice/quote number filled")
+            except Exception as e:
+                logger.warning(f"Could not check/fill invoice/quote number (optional): {str(e)}")
+
+            logger.info("3. Checking transaction date...")
+            self._fill_transaction_date_if_needed()
+
+            if not self._ensure_line_item_exists():
+                logger.error("❌ Could not create a line item to fill in")
+                return False
+
+            logger.info("4. Collapsing to a single line item...")
+            try:
+                self._collapse_to_single_line_item()
+            except Exception as e:
+                logger.error(f"Could not collapse to a single line item: {str(e)}")
+                self._log_error_with_context("fill_reimbursement_expenses:collapse_rows", e)
+                return False
+
+            logger.info(f"5. Overwriting line item with amount ${amount} and description...")
+            try:
+                price_field = self.wait.until(
+                    EC.presence_of_element_located((By.NAME, "rows[0].price"))
+                )
+                self._force_set_field_value(price_field, str(amount))
+
+                qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
+                if not (qty_field.get_attribute("value") or "").strip():
+                    qty_field.send_keys("1")
+
+                description_field = self.driver.find_element(By.NAME, "rows[0].description")
+                self._force_set_field_value(description_field, comment or category)
+
+                logger.info("✓ Line item overwritten")
+            except Exception as e:
+                logger.error(f"Could not set line item amount/description: {str(e)}")
+                self._log_error_with_context("fill_reimbursement_expenses:amount", e)
+                return False
+
+            logger.info(f"6. Selecting expense category: {category}...")
+            if not self._select_line_item_category(category):
+                logger.error(f"❌ Could not select expense category '{category}'")
+                return False
+
+            logger.info("7. Zeroing shipping, discount, and tax...")
+            try:
+                for field_name in ("shipping", "discount", "tax"):
+                    field = self.driver.find_element(By.NAME, field_name)
+                    self._force_set_field_value(field, "0.00")
+                logger.info("✓ Shipping/discount/tax zeroed")
+            except Exception as e:
+                logger.error(f"Could not zero shipping/discount/tax: {str(e)}")
+                self._log_error_with_context("fill_reimbursement_expenses:totals", e)
+                return False
+
+            if additional_files:
+                logger.info("8. Uploading additional documentation...")
+                extra_paths = self._extract_file_paths(additional_files)
+                if extra_paths is None:
+                    return False
+                try:
+                    extra_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
+                    extra_input.send_keys('\n'.join(extra_paths))
+                    time.sleep(1)
+                    logger.info("✓ Additional documentation uploaded")
+                except Exception as e:
+                    logger.error(f"Could not upload additional documentation: {str(e)}")
+                    self._log_error_with_context("fill_reimbursement_expenses:additional_files", e)
+                    return False
+
+            logger.info("9. Clicking Continue...")
+            try:
+                continue_button = self.wait.until(
+                    EC.element_to_be_clickable((
+                        By.XPATH,
+                        "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                        "'abcdefghijklmnopqrstuvwxyz'), 'continue')]"
+                    ))
+                )
+                continue_button.click()
+                logger.info("✓ Continue clicked")
+            except Exception as e:
+                logger.error(f"Could not click Continue: {str(e)}")
+                self._log_error_with_context("fill_reimbursement_expenses:continue", e)
+                return False
+
+            wait_10s = WebDriverWait(self.driver, 10)
+            wait_10s.until(lambda d: 'select-wallet' in d.current_url)
+            logger.info("✓ Manage Expenses complete, landed on Select Purse step")
+            return True
+
+        except Exception as e:
+            self._log_error_with_context("Fill Reimbursement Expenses", e)
+            return False
+
+    def _select_line_item_category(self, category: str) -> bool:
+        """
+        Open the "Select Expense Category" modal for line item 0, search for the
+        (normalized) category, click the matching radio option, and save. Categories in
+        this modal have no stable attribute (no data-test, opaque radio values), so
+        matching is done by visible text via JavaScript.
+        """
+        category_normalized = self._normalize_category_name(category)
+
+        try:
+            open_button = self.wait.until(
+                EC.element_to_be_clickable((By.XPATH, "(//button[contains(., 'Select Expense Category') or "
+                                                        "contains(., 'Expense Category')])[1]"))
+            )
+            open_button.click()
+        except Exception as e:
+            logger.error(f"Could not open expense category picker: {str(e)}")
+            return False
+
+        try:
+            search_input = self.wait.until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='search']"))
+            )
+            search_input.clear()
+            search_input.send_keys(category_normalized)
+            time.sleep(1)  # Let the results list filter
+        except Exception as e:
+            logger.warning(f"Could not use category search box, will search full list: {str(e)}")
+
+        clicked = self.driver.execute_script("""
+            const target = arguments[0].trim().toLowerCase();
+            const dialog = document.querySelector('.MuiDialog-root, [role="dialog"]') || document;
+            const radios = Array.from(dialog.querySelectorAll('input[type=radio]'));
+            const matchesText = (radio, exact) => {
+                let el = radio;
+                for (let i = 0; i < 6 && el; i++) {
+                    const text = (el.textContent || '').trim().toLowerCase();
+                    if (exact ? text === target : text.includes(target)) return true;
+                    el = el.parentElement;
+                }
+                return false;
+            };
+            let match = radios.find(r => matchesText(r, true)) || radios.find(r => matchesText(r, false));
+            if (match) { match.click(); return true; }
+            return false;
+        """, category_normalized)
+
+        if not clicked:
+            logger.error(f"Could not find category option matching '{category_normalized}' in picker")
+            return False
+
+        try:
+            save_button = self.wait.until(
+                EC.element_to_be_clickable((
+                    By.CSS_SELECTOR,
+                    ".MuiDialog-root button[data-test='Save'], [role='dialog'] button[data-test='Save']"
+                ))
+            )
+            save_button.click()
+            logger.info(f"✓ Category '{category_normalized}' selected and saved")
+            return True
+        except Exception as e:
+            logger.error(f"Could not save category selection: {str(e)}")
+            return False
+
+    def select_wizard_purse(self, purse_name: str = "Arizona - ESA") -> bool:
+        """
+        Step 3 of the new Direct Pay wizard ("Select Purse"): check the purse to pay from
+        and continue. The checkbox has no stable attribute, so it's matched by the purse
+        name's visible text via JavaScript (same approach as the category picker).
+
+        Args:
+            purse_name: Visible label of the purse to select
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("=== STEP 5: SELECT PURSE ===")
+
+            self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+
+            logger.info(f"1. Selecting purse: {purse_name}...")
+            clicked = self.driver.execute_script("""
+                const target = arguments[0].trim().toLowerCase();
+                const checkboxes = Array.from(document.querySelectorAll('input[type=checkbox]'));
+                for (const cb of checkboxes) {
+                    let el = cb;
+                    for (let i = 0; i < 6 && el; i++) {
+                        if ((el.textContent || '').trim().toLowerCase().includes(target)) {
+                            if (!cb.checked) { cb.click(); }
+                            return true;
+                        }
+                        el = el.parentElement;
+                    }
+                }
+                return false;
+            """, purse_name)
+
+            if not clicked:
+                logger.error(f"Could not find purse checkbox for '{purse_name}'")
+                return False
+            logger.info(f"✓ Purse '{purse_name}' selected")
+
+            time.sleep(1)  # Let the Continue button's disabled state update
+
+            logger.info("2. Clicking Continue...")
+            continue_button = self.wait.until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                    "'abcdefghijklmnopqrstuvwxyz'), 'continue')]"
+                ))
+            )
+            continue_button.click()
+            logger.info("✓ Continue clicked")
+
+            wait_10s = WebDriverWait(self.driver, 10)
+            wait_10s.until(lambda d: 'review' in d.current_url)
+            logger.info("✓ Purse selected, landed on Review & Submit step")
+            return True
+
+        except Exception as e:
+            self._log_error_with_context("Select Direct Pay Purse", e)
+            return False
+
+    def fill_wizard_review(self, comment: str = None) -> bool:
+        """
+        Step 4 of the new Direct Pay wizard ("Review & Submit"): fill the optional
+        comment for the approver. Everything else on this page is a read-only summary
+        of what was entered in earlier steps.
+
+        Args:
+            comment: Comment text for the approver (optional)
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("=== STEP 6: FILL REVIEW & SUBMIT ===")
+
+            if comment:
+                logger.info("1. Filling comment for approver...")
+                try:
+                    comment_field = self.wait.until(
+                        EC.presence_of_element_located((By.NAME, "comments"))
+                    )
+                    comment_field.clear()
+                    comment_field.send_keys(comment)
+                    logger.info("✓ Comment filled")
+                except Exception as e:
+                    logger.warning(f"Could not fill comment field (optional): {str(e)}")
+
+            logger.info("✓ Review page ready")
+            return True
+
+        except Exception as e:
+            self._log_error_with_context("Fill Direct Pay Review", e)
+            return False
+
+    def submit_wizard(self, wait_for_confirmation: bool = True):
+        """
+        Submit the direct pay request from the Review & Submit page (final step of the
+        4-step wizard). The Submit button has no data-test/id attribute, so it's matched
+        by its visible text.
 
         Args:
             wait_for_confirmation: If True, wait for ClassWallet to confirm submission
@@ -1463,20 +1539,23 @@ class ClassWalletAutomation:
                          If wait_for_confirmation=False, returns True/False
         """
         try:
-            logger.info(f"=== STEP 6: SUBMIT DIRECT PAY ===")
+            logger.info(f"=== STEP 7: SUBMIT DIRECT PAY ===")
 
             time.sleep(1)  # Wait for page to be ready
 
-            # Click Next button on Review page to proceed to submission
-            logger.info("1. Clicking Next button to submit...")
+            logger.info("1. Clicking Submit button...")
 
             wait_5s = WebDriverWait(self.driver, 5)
-            next_button = wait_5s.until(
-                EC.element_to_be_clickable((By.ID, "next"))
+            submit_button = wait_5s.until(
+                EC.element_to_be_clickable((
+                    By.XPATH,
+                    "//button[contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', "
+                    "'abcdefghijklmnopqrstuvwxyz'), 'submit')]"
+                ))
             )
-            logger.info("✓ Found Next button")
-            next_button.click()
-            logger.info("✓ Next button clicked - submitting Direct Pay")
+            logger.info("✓ Found Submit button")
+            submit_button.click()
+            logger.info("✓ Submit button clicked - submitting Direct Pay")
 
             # Wait for confirmation if requested
             if wait_for_confirmation:

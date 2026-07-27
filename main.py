@@ -69,7 +69,10 @@ def main():
         os.environ.get('FLASK_ENV', '').lower() == 'development' or
         os.environ.get('DEBUG', '0') == '1'
     )
-    app.run(debug=debug_mode, host=host, port=port, use_reloader=True)
+    # threaded=True is required so a "cancel submission" request can actually reach the
+    # server while /api/submit is blocked driving the ClassWallet browser automation -
+    # see app/automation.py's cancel_active_submission().
+    app.run(debug=debug_mode, host=host, port=port, use_reloader=True, threaded=True)
 
 
 if __name__ == '__main__':

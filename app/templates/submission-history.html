@@ -271,9 +271,17 @@
                 const student = submission.student || 'N/A';
                 const vendor = submission.store_name || submission.vendor_name || 'N/A';
                 const amount = parseFloat(submission.amount || 0).toFixed(2);
-                const status = submission.success !== false ? 'success' : 'failed';
-                const statusText = status === 'success' ? 'Successful' : 'Failed';
+                // auto_submitted === false means the automation only filled the form and
+                // left it on ClassWallet's Review page for manual confirmation - it does
+                // NOT mean the request was actually submitted, so don't call it "Successful".
+                const status = submission.auto_submitted === false
+                    ? 'pending'
+                    : (submission.success === false ? 'failed' : 'success');
+                const statusText = status === 'pending' ? 'Pending Review' : (status === 'success' ? 'Successful' : 'Failed');
                 const statusClass = `status-${status}`;
+                const statusTitle = status === 'pending'
+                    ? "This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below."
+                    : '';
                 const timestamp = submission.timestamp || '';
 
                 return `
@@ -295,8 +303,10 @@
                             </div>
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                    <span class="badge ${statusClass} status-badge">${statusText}</span>
+                                    <span class="badge ${statusClass} status-badge" title="${statusTitle}">${statusText}</span>
                                     ${isManual ? '<span class="badge badge-manual ms-2">Manual Entry</span>' : '<span class="badge bg-secondary ms-2">' + (type === 'direct_pay' ? 'Direct Pay' : 'Reimbursement') + '</span>'}
+                                    ${status === 'pending' ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="event.stopPropagation(); markSubmissionSubmitted('${timestamp}');">Mark as Submitted</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger ms-2 py-0" onclick="event.stopPropagation(); cancelPendingSubmission('${timestamp}');">Cancel</button>` : ''}
                                 </div>
                             </div>
                             <div class="row">
@@ -393,9 +403,15 @@
                                 <div class="detail-row">
                                     <span class="detail-label">Status:</span>
                                     <span class="detail-value">
-                                        <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
-                                            ${submission.success !== false ? 'Successful' : 'Failed'}
-                                        </span>
+                                        ${submission.auto_submitted === false ? `
+                                            <span class="badge bg-warning text-dark" title="This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below.">Pending Review</span>
+                                            <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="cancelPendingSubmission('${submission.timestamp}')">Cancel</button>
+                                        ` : `
+                                            <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
+                                                ${submission.success !== false ? 'Successful' : 'Failed'}
+                                            </span>
+                                        `}
                                     </span>
                                 </div>
                         `;
@@ -502,6 +518,37 @@
                 console.error('Error:', error);
                 alert('Error deleting submission: ' + error.message);
             });
+        }
+
+        function markSubmissionSubmitted(timestamp) {
+            if (!confirm('Confirm this request was actually submitted in ClassWallet?')) return;
+            fetch(`/api/submission/${timestamp}/mark-submitted`, { method: 'PUT' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('submissionModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                        loadSubmissionHistory();
+                    } else {
+                        alert('Error: ' + (data.message || data.error));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error marking submission as submitted: ' + error.message);
+                });
+        }
+
+        function cancelPendingSubmission(timestamp) {
+            // Pending-review entries were never actually confirmed submitted in ClassWallet,
+            // so canceling one just removes the log entry rather than needing a separate
+            // "canceled" status - there's nothing else to track once it's discarded.
+            if (!confirm('Cancel this pending submission? This removes it from your history - it will NOT affect anything in ClassWallet.')) return;
+            const modalEl = document.getElementById('submissionModal');
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+            deleteSubmission(timestamp);
         }
 
         function deleteMultipleSubmissions(timestamps) {

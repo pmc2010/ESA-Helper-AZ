@@ -181,59 +181,80 @@ All data is JSON (no database):
 
 ## Key Workflows
 
-### Reimbursement Submission (Main Flow)
+### Reimbursement & Direct Pay Submission Workflow (Rewritten for ClassWallet's 2026/2027 UI)
+
+ClassWallet rolled out a platform redesign for the 2026/2027 school year: AI document scanning
+(IDP) on uploaded invoices/receipts, and a reordered 4-step wizard shared by **both** Reimbursement
+and Direct Pay (`app/classwallet.py`'s `upload_wizard_invoice()`, `select_wizard_purse()`,
+`fill_wizard_review()`, and `submit_wizard()` are literally the same methods used by both flows).
+See `CLASSWALLET_2026_UI_MIGRATION.md` for the full investigation, exact selectors, and how this
+was discovered/fixed - this section just summarizes the resulting flow.
 
 ```
 User fills form → POST /api/submit → SubmissionOrchestrator
 → Login to ClassWallet
 → Select student
-→ Click "Start Reimbursement"
-→ Fill store name & amount
-→ Upload files
-→ Handle image editor modal (auto-click Save)
-→ Select expense category
-→ Fill PO number & comment
-→ Submit form
-→ Log to logs/ directory
-→ Close browser
+→ Start Reimbursement / Direct Pay
+    - Reimbursement: click "Start a new Reimbursement", lands directly on Upload Invoice
+    - Direct Pay: search for and select vendor (using classwallet_search_term if configured),
+      then lands on Upload Invoice
+→ [Upload Invoice] Upload the invoice/receipt file - triggers ClassWallet's IDP scan
+  ("Scan Receipt" button), which auto-advances to Manage Expenses once scanning completes
+→ [Manage Expenses] Overwrite known fields with ESA Helper's values (Vendor, line-item
+  amount always overwritten; User Name overwritten for Direct Pay only - Reimbursement has
+  no such field; invoice/quote number kept if IDP scanned one, else filled; transaction date
+  kept if today-or-earlier, else set to today via ClassWallet's calendar-picker popup).
+  Reimbursement additionally collapses IDP's line items down to one (deleting extras via
+  each row's "Remove expense" + confirmation dialog) since ESA Helper only models a single
+  lump-sum amount/category per submission, and zeroes shipping/discount/tax. Selects the
+  expense category via a search-and-pick modal. Uploads any additional files (e.g.
+  curriculum) via a separate "Additional Documentation" dropzone on this same page.
+→ [Select Purse] Check the "Arizona - ESA" purse
+→ [Review & Submit] Fill the optional approver comment
+→ Submit (if auto_submit=True) OR leave the browser open on the Review page for manual
+  confirmation (if auto_submit=False, the default/safer setting)
+→ Log to logs/ directory, including whether ClassWallet actually confirmed the submission
+  (`auto_submitted` field - see "Submission History Status" below)
+→ Keep browser open indefinitely for user review
 → Return success to frontend
 ```
 
 Each step has extensive logging. Check console or `logs/` for debugging.
 
-### Direct Pay Submission Workflow (New - November 2025)
+**Key differences between the two flows:**
+- Direct Pay searches for and selects a vendor before reaching Upload Invoice; Reimbursement
+  just clicks "Start a new Reimbursement" and lands there directly.
+- Direct Pay's Manage Expenses page has a "User Name" field (filled with the selected student's
+  name); Reimbursement's does not.
+- Reimbursement collapses IDP's line items to one and zeroes shipping/discount/tax;
+  Direct Pay assumes IDP already produced exactly one line item (not yet generalized to
+  multi-item Direct Pay invoices).
+- Direct Pay requires vendors to be configured with a `classwallet_search_term` for automated
+  lookup (`name`, `classwallet_search_term`, plus other business info like email/tax rate). If a
+  vendor lacks `classwallet_search_term`, the user can't select it for Direct Pay and sees a
+  clear warning.
 
-```
-User fills Direct Pay form → POST /api/submit → SubmissionOrchestrator
-→ Login to ClassWallet
-→ Select student
-→ Click "Start Direct Pay"
-→ Search for and select vendor (using classwallet_search_term if configured)
-→ Enter amount
-→ Upload files (optional)
-→ Select expense category
-→ Fill additional info (invoice/quote number, comments)
-→ Proceed to Review page
-→ Submit form (if auto_submit=True) OR leave for manual review
-→ Log to logs/ directory
-→ Keep browser open indefinitely for user review
-→ Return success to frontend
-```
+**Submission History Status:** Because `auto_submit=False` only fills the ClassWallet form and
+waits for the browser window to close (it can't tell whether you actually clicked Submit in
+ClassWallet or backed out), logged submissions include an `auto_submitted` boolean reflecting
+this. The UI (Recent Submissions sidebar, Submission History page) shows a "Pending Review in
+ClassWallet" badge instead of claiming success when `auto_submitted` is `false`. Older log
+entries predate this field and are treated as submitted (not retroactively flagged).
 
-**Key Differences from Reimbursement:**
-- Uses vendor lookup instead of store name entry
-- Optional files (no payment receipt required)
-- Requires `classwallet_search_term` in vendor profile for automated lookup
-- Additional info page has different field structure than reimbursement
-- Browser stays open indefinitely instead of closing (for manual review/submission)
-
-**Vendor Configuration:**
-Direct Pay requires vendors to be configured with:
-- `name` - Display name for user
-- `classwallet_search_term` - Exact search term to find vendor in ClassWallet (required for automation)
-- Other business info (email, tax rate, etc.)
-
-If a vendor lacks `classwallet_search_term`, user cannot select it for Direct Pay and sees a clear warning.
+**Canceling an in-progress submission:** `/api/submit` blocks server-side for the entire
+automation, so the Flask app runs with `threaded=True` (`main.py`) to let a concurrent
+`POST /api/cancel-submission` request reach it. That endpoint calls
+`app.automation.cancel_active_submission()`, which quits the currently-active browser -
+whatever Selenium step was mid-flight then fails, which `submit_to_classwallet()` recognizes
+and reports as an explicit cancellation (`error_code: 'CANCELED'`) rather than a generic
+failure. The frontend triggers this from the Confirm Submission modal's `hidden.bs.modal`
+event (fires for Cancel, the X button, Escape, and backdrop click alike) whenever a
+submission was actually in flight at that moment. Safe as long as `auto_submit=False` (the
+default) - ClassWallet's own Submit is never clicked without it. With `auto_submit=True`,
+canceling in the ~1-2s window while `submit_wizard()` is actively clicking Submit and waiting
+for confirmation could theoretically interrupt after ClassWallet already registered the
+click, leaving ESA Helper's record out of sync with ClassWallet - not fixed, since closing
+that race would need locking around the exact click moment for a rare edge case.
 
 ### Invoice Generation (Optional)
 
@@ -516,6 +537,18 @@ ESA-Helper-AZ/
 - ✓ Documentation updated with Direct Pay workflow details
 - See README.md for Direct Pay usage instructions
 
+### July 2026 - ClassWallet 2026/2027 UI Migration
+- ✓ Rewrote Direct Pay and Reimbursement automation for ClassWallet's redesigned 4-step wizard
+  (AI document scanning + line-item categorization) - both confirmed working end-to-end
+  against real submissions
+- ✓ Fixed a masked-input `.clear()` bug (overwriting a pre-filled amount silently appended
+  instead of replacing), a calendar-picker popup blocking the Transaction Date field, and a
+  delete-confirmation dialog blocking Reimbursement's multi-item-row collapsing
+- ✓ Fixed submission history to distinguish "actually submitted" from "form filled, left for
+  manual review" (`auto_submitted` field) instead of always claiming success
+- ✓ 126 tests passing (added tests/test_reimbursement.py)
+- See CLASSWALLET_2026_UI_MIGRATION.md for the full investigation and exact selectors
+
 ### November 2025 - Template Feature Implementation
 - ✓ Dynamic file path selection UI for templates
 - ✓ Save template functionality implemented (replaced "coming soon")
@@ -537,7 +570,8 @@ ESA-Helper-AZ/
 
 ## Last Updated
 
-November 2025 - Direct Pay automation complete with full testing coverage (85 tests, 23% code coverage)
+July 2026 - Direct Pay and Reimbursement rewritten for ClassWallet's 2026/2027 UI redesign,
+submission history status accuracy fixed (126 tests passing)
 
 ---
 

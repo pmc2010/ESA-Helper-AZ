@@ -9,7 +9,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from app import utils
-from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions
+from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions, mark_submission_submitted
 from app.invoice_generator import (
     InvoiceGenerator, load_vendor_profiles, load_student_profiles,
     get_vendor, get_student, save_vendor_profile, save_student_profile,
@@ -101,7 +101,7 @@ def manage_vendors():
 @main_bp.route('/manage-templates')
 def manage_templates():
     """Render template management page"""
-    students = load_student_profiles()
+    students = sorted(load_student_profiles(), key=lambda s: s.get('name', '').lower())
     return render_template(
         'manage-templates.html',
         students=students,
@@ -610,6 +610,29 @@ def delete_submission_endpoint(timestamp):
         }), 500
 
 
+@api_bp.route('/submission/<timestamp>/mark-submitted', methods=['PUT'])
+def mark_submission_submitted_endpoint(timestamp):
+    """Mark a pending-review submission as actually submitted in ClassWallet"""
+    try:
+        success = mark_submission_submitted(timestamp)
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Submission {timestamp} marked as submitted'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Could not mark submission {timestamp} as submitted'
+            }), 404
+    except Exception as e:
+        logger.error(f"Error marking submission {timestamp} as submitted: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @api_bp.route('/submissions/delete-all', methods=['DELETE'])
 def delete_all_submissions_endpoint():
     """Delete all submissions from history"""
@@ -993,6 +1016,24 @@ def submit_reimbursement():
     result = submit_to_classwallet(data, auto_submit=auto_submit)
 
     return jsonify(result)
+
+
+@api_bp.route('/cancel-submission', methods=['POST'])
+def cancel_submission():
+    """
+    Cancel the currently in-progress ClassWallet submission (if any) by closing its
+    browser window. Requires the Flask app to run with threaded=True, since /api/submit
+    blocks for the entire automation - this request has to be handled concurrently with
+    that one to actually interrupt it.
+    """
+    from app.automation import cancel_active_submission
+
+    canceled = cancel_active_submission()
+    return jsonify({
+        'success': True,
+        'canceled': canceled,
+        'message': 'Submission canceled.' if canceled else 'No submission was in progress.'
+    })
 
 
 @api_bp.route('/manual-submission', methods=['POST'])
@@ -2347,6 +2388,20 @@ def get_analytics():
             'students': []
         }
 
+        def in_month(sub, year, month):
+            try:
+                sub_date = datetime.fromisoformat(sub['timestamp'])
+                return sub_date.year == year and sub_date.month == month
+            except (ValueError, KeyError):
+                return False
+
+        def in_range(sub, start, end):
+            try:
+                sub_date = datetime.fromisoformat(sub['timestamp'])
+                return start <= sub_date <= end
+            except (ValueError, KeyError):
+                return False
+
         for student in students:
             # Get allotment for this fiscal year
             allotments = student.get('esa_allotments', [])
@@ -2358,15 +2413,19 @@ def get_analytics():
                 if s.get('student') == student['name']
             ]
 
+            # Only count submissions ClassWallet actually confirmed toward spending totals.
+            # auto_submitted=False means the automation only filled out the form and left it
+            # on ClassWallet's Review page for manual confirmation - since we don't know
+            # whether the user went on to actually submit it there, counting it here would
+            # risk overstating real spending and understating remaining allotment. Missing
+            # auto_submitted (older log entries, predating this field) is treated as
+            # confirmed rather than retroactively excluded.
+            confirmed_submissions = [s for s in student_submissions if s.get('auto_submitted') is not False]
+            pending_submissions = [s for s in student_submissions if s.get('auto_submitted') is False]
+
             # Filter by month
-            month_submissions = []
-            for sub in student_submissions:
-                try:
-                    sub_date = datetime.fromisoformat(sub['timestamp'])
-                    if sub_date.year == selected_date.year and sub_date.month == selected_date.month:
-                        month_submissions.append(sub)
-                except (ValueError, KeyError):
-                    continue
+            month_submissions = [s for s in confirmed_submissions if in_month(s, selected_date.year, selected_date.month)]
+            month_pending_count = sum(1 for s in pending_submissions if in_month(s, selected_date.year, selected_date.month))
 
             # Calculate totals
             total_amount = sum(float(s.get('amount', 0)) for s in month_submissions)
@@ -2375,14 +2434,8 @@ def get_analytics():
 
             # YTD calculations (July 1 to current date)
             fy_start = datetime(fiscal_year, 7, 1)
-            ytd_submissions = []
-            for sub in student_submissions:
-                try:
-                    sub_date = datetime.fromisoformat(sub['timestamp'])
-                    if sub_date >= fy_start and sub_date <= selected_date:
-                        ytd_submissions.append(sub)
-                except (ValueError, KeyError):
-                    continue
+            ytd_submissions = [s for s in confirmed_submissions if in_range(s, fy_start, selected_date)]
+            ytd_pending_count = sum(1 for s in pending_submissions if in_range(s, fy_start, selected_date))
 
             ytd_amount = sum(float(s.get('amount', 0)) for s in ytd_submissions)
             ytd_count = len(ytd_submissions)
@@ -2399,8 +2452,10 @@ def get_analytics():
                 'month_submissions': submission_count,
                 'month_total': round(total_amount, 2),
                 'month_average': round(avg_amount, 2),
+                'month_pending': month_pending_count,
                 'ytd_submissions': ytd_count,
                 'ytd_total': round(ytd_amount, 2),
+                'ytd_pending': ytd_pending_count,
                 'annualized_rate': round(annualized_rate, 2),
                 'allotment': None
             }

@@ -323,6 +323,48 @@ def delete_submission(timestamp):
         return False
 
 
+def mark_submission_submitted(timestamp):
+    """
+    Mark a pending-review submission as actually submitted in ClassWallet.
+
+    Used when auto_submit was off (the default) and the automation only filled
+    the form, leaving whether the user actually clicked Submit in ClassWallet
+    unknown - the user confirms it manually here after checking ClassWallet.
+
+    Args:
+        timestamp: The timestamp of the submission to update (e.g., '20251112_000140')
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    log_dir = LOGS_DIR
+    history_file = log_dir / 'submission_history.json'
+
+    if not history_file.exists():
+        logger.warning(f"History file not found: {history_file}")
+        return False
+
+    try:
+        with open(history_file, 'r') as f:
+            data = json.load(f)
+
+        submissions = data.get('submissions', [])
+        for submission in submissions:
+            if submission.get('timestamp') == timestamp:
+                submission['auto_submitted'] = True
+                with open(history_file, 'w') as f:
+                    json.dump(data, f, indent=2)
+                logger.info(f"Marked submission {timestamp} as submitted")
+                return True
+
+        logger.warning(f"Submission {timestamp} not found in history")
+        return False
+
+    except Exception as e:
+        logger.error(f"Error marking submission {timestamp} as submitted: {str(e)}")
+        return False
+
+
 def delete_all_submissions(created_by_filter=None):
     """
     Delete submissions from history

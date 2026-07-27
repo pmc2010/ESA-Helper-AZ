@@ -17,6 +17,10 @@ let formData = {};
 let selectedFiles = {};
 let templates = [];
 let vendors = [];
+// True while an automated (non-manual) /api/submit call is in flight - used so closing the
+// Confirm Submission modal (Cancel button, X button, Escape, backdrop click) while this is
+// true actually halts the ClassWallet browser automation instead of just hiding the modal.
+let submissionInProgress = false;
 
 /**
  * Get today's date in local timezone as YYYY-MM-DD format
@@ -384,13 +388,25 @@ function initializeForm() {
     // Confirmation
     document.getElementById('confirmSubmitBtn').addEventListener('click', confirmSubmit);
 
-    // Reset button state when confirmation modal is dismissed (Cancel button or Close button)
+    // Reset button state when confirmation modal is dismissed (Cancel button or Close button).
+    // If a submission was actually in progress at that point (not just reviewing before
+    // submitting), also cancel it server-side - otherwise Cancel silently does nothing to
+    // the already-running ClassWallet automation.
     const confirmationModal = document.getElementById('confirmationModal');
     if (confirmationModal) {
         confirmationModal.addEventListener('hidden.bs.modal', function() {
+            if (submissionInProgress) {
+                cancelInProgressSubmission();
+            }
+
             const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
             confirmSubmitBtn.disabled = false;
             confirmSubmitBtn.textContent = 'Submit to ClassWallet';
+
+            const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+            if (confirmCancelBtn) {
+                confirmCancelBtn.textContent = 'Cancel';
+            }
         });
     }
 
@@ -1232,8 +1248,10 @@ function showConfirmation() {
         </ul>
 
         <div class="alert alert-info">
-            <strong>Note:</strong> This will open ClassWallet in your browser and automatically fill in the form.
-            The automation will then upload the files and submit the request.
+            <strong>Note:</strong> This will open ClassWallet in your browser and automatically fill in the form
+            and upload the files. Depending on your Auto-Submit setting (Manage Students), it will either submit
+            the request automatically or leave it on ClassWallet's Review page for you to confirm manually - the
+            request is only actually submitted once you (or the automation) click Submit in ClassWallet itself.
         </div>
     `;
 
@@ -1307,15 +1325,41 @@ async function confirmSubmit() {
     try {
         // Use different endpoint for manual vs automated submissions
         const endpoint = isManualEntry ? '/api/manual-submission' : '/api/submit';
+
+        // /api/submit blocks server-side for the entire ClassWallet browser automation, so
+        // this fetch won't resolve until it either finishes, is canceled (see
+        // cancelInProgressSubmission(), triggered by closing this modal while this flag is
+        // set), or you close the automated browser window yourself. Manual entries resolve
+        // immediately and don't touch ClassWallet, so there's nothing to cancel for those.
+        if (!isManualEntry) {
+            submissionInProgress = true;
+            const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+            if (confirmCancelBtn) {
+                confirmCancelBtn.textContent = 'Cancel Submission';
+            }
+        }
+
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(submitData)
         });
 
+        submissionInProgress = false;
         const result = await response.json();
 
-        if (response.ok) {
+        if (result.canceled) {
+            // Already handled by cancelInProgressSubmission() when Cancel was clicked -
+            // the button/modal state was reset then, so there's nothing more to show here.
+            console.log('Submission was canceled:', result);
+            return;
+        }
+
+        // Check result.success, not just the HTTP status - /api/submit always returns 200
+        // even when the automation failed or (when auto-submit is off) never actually
+        // clicked ClassWallet's own Submit button, so response.ok alone can't tell success
+        // from failure or from "form filled in but not yet confirmed by you in ClassWallet."
+        if (response.ok && result.success) {
             console.log('Submission successful, response:', result);
 
             // Hide confirmation modal
@@ -1324,10 +1368,24 @@ async function confirmSubmit() {
                 confirmationModal.hide();
             }
 
-            // Show success modal
+            // Show success modal. For automated (non-manual) submissions, the automation
+            // may have stopped at ClassWallet's Review page for you to confirm manually
+            // (result.auto_submitted === false) - closing that browser window without
+            // clicking Submit in ClassWallet does NOT submit the request, so don't claim
+            // it was submitted successfully in that case.
             document.getElementById('successPoNumber').textContent = result.po_number || poNumber;
-            const successTitle = isManualEntry ? 'Transaction Logged' : 'Submitted Successfully';
+            let successTitle = 'Submitted Successfully';
+            let successMessage = 'Your reimbursement/direct pay request has been submitted successfully!';
+            if (isManualEntry) {
+                successTitle = 'Transaction Logged';
+            } else if (result.auto_submitted === false) {
+                successTitle = 'Ready for Review in ClassWallet';
+                successMessage = result.message ||
+                    'Your request was filled in ClassWallet and is ready for review. ' +
+                    'It has NOT been submitted yet - please confirm it manually in ClassWallet.';
+            }
             document.querySelector('#successModal .modal-title').textContent = successTitle;
+            document.getElementById('successMessage').textContent = successMessage;
             new bootstrap.Modal(document.getElementById('successModal')).show();
 
             // Re-enable button since submission is complete
@@ -1365,6 +1423,7 @@ async function confirmSubmit() {
             confirmSubmitBtn.textContent = originalBtnText;
         }
     } catch (error) {
+        submissionInProgress = false;
         console.error('Error submitting form:', error);
 
         // Hide confirmation modal before showing error modal
@@ -1382,6 +1441,30 @@ async function confirmSubmit() {
         // Re-enable button on error so user can try again
         confirmSubmitBtn.disabled = false;
         confirmSubmitBtn.textContent = originalBtnText;
+    }
+}
+
+/**
+ * Cancel a ClassWallet submission that's currently in progress (the confirmSubmit() fetch
+ * is still awaiting /api/submit). Closes the automated browser server-side, which halts
+ * whatever step it's on; the original fetch will resolve shortly after with a canceled
+ * result that confirmSubmit() already knows to ignore (see the `result.canceled` check).
+ * Resets the button state immediately rather than waiting for that, since the browser
+ * quitting can take a moment to fully unwind server-side.
+ */
+function cancelInProgressSubmission() {
+    console.log('Canceling in-progress submission...');
+    submissionInProgress = false;
+
+    fetch('/api/cancel-submission', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => console.log('Cancel response:', data))
+        .catch(error => console.error('Error canceling submission:', error));
+
+    const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+    if (confirmSubmitBtn) {
+        confirmSubmitBtn.disabled = false;
+        confirmSubmitBtn.textContent = 'Submit to ClassWallet';
     }
 }
 
@@ -2236,8 +2319,8 @@ function addLineItem() {
     newRow.innerHTML = `
         <td><input type="text" class="form-control form-control-sm line-description" placeholder="e.g., Ice skating lesson"></td>
         <td><input type="number" class="form-control form-control-sm line-quantity" value="1" min="1" step="1" onchange="updateInvoiceTotals()"></td>
-        <td><input type="number" class="form-control form-control-sm line-unit-price" step="0.01" min="0" onchange="updateInvoiceTotals()"></td>
-        <td><input type="number" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
+        <td><input type="text" inputmode="decimal" class="form-control form-control-sm line-unit-price" onchange="updateInvoiceTotals()"></td>
+        <td><input type="text" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger remove-line-item" onclick="removeLineItem(this)">×</button></td>
     `;
     tbody.appendChild(newRow);
