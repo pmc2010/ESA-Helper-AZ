@@ -1394,7 +1394,7 @@
                                 <h6 class="mb-1" style="font-size: 0.9rem;">${student}</h6>
                                 <small class="text-muted">${vendor}</small>
                                 ${pendingReview ? `
-                                    <br><span class="badge bg-warning text-dark mt-1">Pending Review in ClassWallet</span>
+                                    <br><span class="badge bg-warning text-dark mt-1" title="This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below.">Pending Review</span>
                                     <button type="button" class="btn btn-sm btn-outline-success mt-1 py-0 px-1" style="font-size: 0.7rem;" onclick="event.stopPropagation(); event.preventDefault(); markSubmissionSubmitted('${submission.timestamp}');">Mark as Submitted</button>
                                     <button type="button" class="btn btn-sm btn-outline-danger mt-1 py-0 px-1" style="font-size: 0.7rem;" onclick="event.stopPropagation(); event.preventDefault(); cancelPendingSubmission('${submission.timestamp}');">Cancel</button>
                                 ` : ''}
@@ -1446,7 +1446,7 @@
                                     <div class="col-6"><strong>Status:</strong></div>
                                     <div class="col-6 text-end">
                                         ${submission.auto_submitted === false ? `
-                                            <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                            <span class="badge bg-warning text-dark" title="This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below.">Pending Review</span>
                                             <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="cancelPendingSubmission('${submission.timestamp}')">Cancel</button>
                                         ` : `

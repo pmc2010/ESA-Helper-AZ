@@ -279,6 +279,9 @@
                     : (submission.success === false ? 'failed' : 'success');
                 const statusText = status === 'pending' ? 'Pending Review' : (status === 'success' ? 'Successful' : 'Failed');
                 const statusClass = `status-${status}`;
+                const statusTitle = status === 'pending'
+                    ? "This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below."
+                    : '';
                 const timestamp = submission.timestamp || '';
 
                 return `
@@ -300,7 +303,7 @@
                             </div>
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <div>
-                                    <span class="badge ${statusClass} status-badge">${statusText}</span>
+                                    <span class="badge ${statusClass} status-badge" title="${statusTitle}">${statusText}</span>
                                     ${isManual ? '<span class="badge badge-manual ms-2">Manual Entry</span>' : '<span class="badge bg-secondary ms-2">' + (type === 'direct_pay' ? 'Direct Pay' : 'Reimbursement') + '</span>'}
                                     ${status === 'pending' ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="event.stopPropagation(); markSubmissionSubmitted('${timestamp}');">Mark as Submitted</button>
                                     <button type="button" class="btn btn-sm btn-outline-danger ms-2 py-0" onclick="event.stopPropagation(); cancelPendingSubmission('${timestamp}');">Cancel</button>` : ''}
@@ -401,7 +404,7 @@
                                     <span class="detail-label">Status:</span>
                                     <span class="detail-value">
                                         ${submission.auto_submitted === false ? `
-                                            <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                            <span class="badge bg-warning text-dark" title="This form was filled out in ClassWallet but not yet confirmed submitted - you'll need to review and submit it there yourself, or use the buttons below.">Pending Review</span>
                                             <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
                                             <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="cancelPendingSubmission('${submission.timestamp}')">Cancel</button>
                                         ` : `
