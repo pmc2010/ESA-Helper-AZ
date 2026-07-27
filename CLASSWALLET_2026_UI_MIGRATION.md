@@ -2,6 +2,13 @@
 
 ## ⏭️ Resume here if this session gets interrupted
 
+**Update 2026-07-27: PDF-invoice zero-line-item bug found and fixed, not yet retried live.** A
+real Reimbursement submission got stuck on a PDF receipt (Amazon order confirmation) - IDP's scan
+produced zero line items instead of at least one, which `fill_direct_pay_expenses`/
+`fill_reimbursement_expenses` both assumed always existed. Fixed with `_ensure_line_item_exists()`
+(clicks "+ Add Expense" when the Details table is empty), applied to both methods. See item 3 in
+"Not done yet" below for the full writeup. **Next submission attempt should confirm this works.**
+
 **Update 2026-07-24 ~22:25: WORKING.** Live retry succeeded end-to-end with the delete-confirmation
 fix in place - a real Reimbursement (multi-item receipt collapsed to one line item, invoice +
 curriculum files, category/amount/comment overwritten) submitted successfully through ESA
@@ -83,8 +90,8 @@ committed and pushed to GitHub as of this update.
 
 This one successful run exercised the entire flow including purse selection, review, and final
 submit, so those selectors are now confirmed working too - not just the Manage Expenses step.
-Remaining known gaps (not blockers, just not yet exercised): multi-line-item submissions, and
-PDF invoices (only a JPG has been tested so far). See "Not done yet" section below.
+Remaining known gap: multi-line-item submissions (see "Not done yet" below). PDF invoices were
+tried later (2026-07-27) and did surface a real bug - see the top of this file and item 3 below.
 
 **As of 2026-07-24 ~14:00**: First live attempt (first version of the rewrite) got most of the
 way through but hit a real bug: overwriting the pre-filled Unit Price field turned $2,047.50 into
@@ -304,10 +311,18 @@ Full suite: 119/119 passing.
    against a real submission.
 2. **Multi-line-item submissions are not supported.** If IDP splits an invoice into more than one
    row, or a vendor requires it, `fill_direct_pay_expenses` only ever touches `rows[0]`.
-3. **PDF invoices**: we only observed the resize/rotate/"Scan Receipt" modal for a JPG upload. If a
-   PDF doesn't trigger that modal, `handle_image_editor_modal()` should still return `True` after
-   a ~3s no-modal timeout (existing behavior), and the subsequent 30s wait for `manage-expenses`
-   should still apply — but this path wasn't observed live.
+3. ~~**PDF invoices**: we only observed the resize/rotate/"Scan Receipt" modal for a JPG
+   upload.~~ **Observed live 2026-07-27**: a PDF receipt (Amazon order confirmation) skips the
+   resize/rotate modal entirely (`handle_image_editor_modal()` correctly no-ops after its ~3s
+   timeout, as predicted) - but IDP also produced **zero line items** instead of at least one,
+   which broke both `fill_direct_pay_expenses` and `fill_reimbursement_expenses` (both assumed
+   `rows[0]` always exists after scanning). Fixed with a new `_ensure_line_item_exists()` helper
+   that clicks "+ Add Expense" when no rows are present, called by both methods right after the
+   transaction-date step. **Not yet retried live** - diagnosed from `logs/automation_20260727.log`
+   plus the user confirming the empty Reimbursement Details table on screen, but the fix itself
+   hasn't been exercised against a real submission yet. Direct Pay got the same fix proactively
+   (shares the identical IDP/wizard engine, so presumably has the same exposure) but has never
+   actually hit this case in testing (JPG only so far).
 4. Whether an invoice upload is now *mandatory* to start any Direct Pay submission (old flow made
    files optional) — `upload_wizard_invoice` now fails fast with a clear error if no `invoice`
    file is provided, since step 1 of the new wizard has no visible skip option.

@@ -1085,6 +1085,10 @@ class ClassWalletAutomation:
             logger.info("4. Checking transaction date...")
             self._fill_transaction_date_if_needed()
 
+            if not self._ensure_line_item_exists():
+                logger.error("❌ Could not create a line item to fill in")
+                return False
+
             logger.info(f"5. Overwriting line item amount with: ${amount}")
             try:
                 price_field = self.wait.until(
@@ -1149,6 +1153,35 @@ class ClassWalletAutomation:
 
         except Exception as e:
             self._log_error_with_context("Fill Direct Pay Expenses", e)
+            return False
+
+    def _ensure_line_item_exists(self) -> bool:
+        """
+        Click "+ Add Expense" if IDP's scan produced zero line-item rows, so rows[0] exists
+        for the caller to fill in. Observed with a PDF receipt (Amazon order confirmation) -
+        unlike every JPG receipt tested, IDP scanning a PDF can land on Manage Expenses with
+        an empty Reimbursement/Direct Pay Details table instead of at least one row, since
+        PDFs also skip the resize/rotate "Scan Receipt" modal entirely. Does nothing if a
+        row already exists.
+
+        Returns:
+            bool: True if at least one row exists (already did, or was just added), False
+                  if a row still couldn't be created.
+        """
+        if self.driver.find_elements(By.NAME, "rows[0].price"):
+            return True
+
+        logger.info("No line items found after scan - clicking '+ Add Expense'")
+        try:
+            add_button = self.wait.until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Add Expense')]"))
+            )
+            add_button.click()
+            self.wait.until(EC.presence_of_element_located((By.NAME, "rows[0].price")))
+            logger.info("✓ Added a line item row")
+            return True
+        except Exception as e:
+            logger.error(f"Could not add a line item row: {str(e)}")
             return False
 
     def _collapse_to_single_line_item(self) -> None:
@@ -1243,6 +1276,10 @@ class ClassWalletAutomation:
 
             logger.info("3. Checking transaction date...")
             self._fill_transaction_date_if_needed()
+
+            if not self._ensure_line_item_exists():
+                logger.error("❌ Could not create a line item to fill in")
+                return False
 
             logger.info("4. Collapsing to a single line item...")
             try:
