@@ -91,6 +91,43 @@ class TestDirectPayWorkflow:
         assert kwargs['additional_files'] == {'curriculum': {'name': 'curriculum.pdf', 'path': '/tmp/curriculum.pdf'}}
 
     @patch('app.automation.ClassWalletAutomation')
+    def test_direct_pay_only_sends_one_file_to_upload_invoice_step(self, mock_automation_class):
+        """ClassWallet's Upload Invoice step only accepts a single file - a second invoice
+        file must go to the Additional Documentation dropzone (step 2) instead."""
+        mock_automation = MagicMock()
+        mock_automation_class.return_value = mock_automation
+        _mock_successful_workflow(mock_automation)
+
+        orchestrator = SubmissionOrchestrator()
+        orchestrator.automation = mock_automation
+
+        submission_data = {
+            'request_type': 'Direct Pay',
+            'student': 'Student A',
+            'vendor_name': 'Hayden Acres',
+            'classwallet_search_term': 'hayden acres llc',
+            'amount': '200.85',
+            'expense_category': 'Curriculum',
+            'comment': 'Test',
+            'po_number': '20251111_1234',
+            'files': {
+                'invoice': [
+                    {'name': 'invoice1.pdf', 'path': '/tmp/invoice1.pdf'},
+                    {'name': 'invoice2.pdf', 'path': '/tmp/invoice2.pdf'}
+                ]
+            }
+        }
+
+        result = orchestrator.submit_direct_pay(submission_data, auto_submit=True)
+
+        assert result is True
+        mock_automation.upload_wizard_invoice.assert_called_once_with(
+            {'invoice': {'name': 'invoice1.pdf', 'path': '/tmp/invoice1.pdf'}}
+        )
+        _, kwargs = mock_automation.fill_direct_pay_expenses.call_args
+        assert kwargs['additional_files'] == {'invoice': [{'name': 'invoice2.pdf', 'path': '/tmp/invoice2.pdf'}]}
+
+    @patch('app.automation.ClassWalletAutomation')
     def test_direct_pay_with_search_term(self, mock_automation_class):
         """Test Direct Pay uses search term from vendor config"""
         mock_automation = MagicMock()

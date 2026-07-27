@@ -62,6 +62,45 @@ def _canceled_response() -> Dict:
     }
 
 
+def _split_invoice_files(files: Dict, primary_types: tuple) -> tuple:
+    """
+    Split a submission's files dict into (invoice_files, additional_files) for the new
+    ClassWallet wizard. Step 1's "Upload Invoice" dropzone only accepts a single file -
+    confirmed live via ClassWallet's own "only 1 file can be submitted" error when more
+    than one was sent at once, even though the underlying <input> technically allows
+    multiple. So invoice_files always holds at most one file; anything beyond that
+    (including extra files of the primary type itself, e.g. two separate receipts for one
+    purchase) goes into additional_files instead, uploaded via step 2's "Additional
+    Documentation" dropzone, which does support multiple files.
+
+    Args:
+        files: The submission's files dict, e.g. {'invoice': [...], 'curriculum': [...]}
+        primary_types: Type keys (lowercase) to look for as the primary invoice/receipt,
+                       checked in order - the first one present in `files` wins.
+
+    Returns:
+        (invoice_files, additional_files) dicts
+    """
+    if not isinstance(files, dict):
+        return {}, {}
+
+    lower_keys = {k.lower(): k for k in files.keys()}
+    primary_key = next((lower_keys[t] for t in primary_types if t in lower_keys), None)
+
+    invoice_files = {}
+    additional_files = {}
+    for file_type, file_data in files.items():
+        if file_type == primary_key:
+            entries = file_data if isinstance(file_data, list) else [file_data]
+            invoice_files[file_type] = entries[0]
+            if len(entries) > 1:
+                additional_files[file_type] = entries[1:]
+        else:
+            additional_files[file_type] = file_data
+
+    return invoice_files, additional_files
+
+
 class SubmissionOrchestrator:
     """Orchestrates the full ESA submission workflow"""
 
@@ -184,14 +223,7 @@ class SubmissionOrchestrator:
             comment = submission_data.get('comment')
             files = submission_data.get('files', {}) or {}
 
-            primary_key = None
-            if isinstance(files, dict):
-                lower_keys = {k.lower(): k for k in files.keys()}
-                primary_key = lower_keys.get('invoice') or lower_keys.get('receipt')
-            invoice_files = {primary_key: files[primary_key]} if primary_key else {}
-            additional_files = (
-                {k: v for k, v in files.items() if k != primary_key} if isinstance(files, dict) else {}
-            )
+            invoice_files, additional_files = _split_invoice_files(files, primary_types=('invoice', 'receipt'))
 
             logger.info(f"Starting reimbursement submission for {student} (auto_submit={auto_submit})")
 
@@ -308,14 +340,7 @@ class SubmissionOrchestrator:
             files = submission_data.get('files', {}) or {}
             search_term = submission_data.get('classwallet_search_term')  # Get search term if available
 
-            invoice_files = {}
-            additional_files = {}
-            if isinstance(files, dict):
-                for file_type, file_data in files.items():
-                    if file_type.lower() == 'invoice':
-                        invoice_files[file_type] = file_data
-                    else:
-                        additional_files[file_type] = file_data
+            invoice_files, additional_files = _split_invoice_files(files, primary_types=('invoice',))
 
             logger.info(f"Starting direct pay submission for {student} (auto_submit={auto_submit})")
 

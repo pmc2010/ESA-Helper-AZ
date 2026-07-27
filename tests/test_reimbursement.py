@@ -96,6 +96,43 @@ class TestReimbursementWorkflow:
         mock_automation.submit_wizard.assert_not_called()
 
     @patch('app.automation.ClassWalletAutomation')
+    def test_reimbursement_only_sends_one_file_to_upload_invoice_step(self, mock_automation_class):
+        """ClassWallet's Upload Invoice step only accepts a single file (confirmed live via
+        its own "only 1 file can be submitted" error) - a second receipt for the same
+        purchase must go to the Additional Documentation dropzone (step 2) instead."""
+        mock_automation = MagicMock()
+        mock_automation_class.return_value = mock_automation
+        _mock_successful_workflow(mock_automation)
+
+        orchestrator = SubmissionOrchestrator()
+        orchestrator.automation = mock_automation
+
+        submission_data = {
+            'request_type': 'Reimbursement',
+            'student': 'Student A',
+            'store_name': 'Amazon',
+            'amount': '116.29',
+            'expense_category': 'Supplemental Materials',
+            'comment': 'Test',
+            'po_number': '20260727_0001',
+            'files': {
+                'receipt': [
+                    {'name': 'legos.pdf', 'path': '/tmp/legos.pdf'},
+                    {'name': 'legos2.pdf', 'path': '/tmp/legos2.pdf'}
+                ]
+            }
+        }
+
+        result = orchestrator.submit_reimbursement(submission_data, auto_submit=False)
+
+        assert result is True
+        mock_automation.upload_wizard_invoice.assert_called_once_with(
+            {'receipt': {'name': 'legos.pdf', 'path': '/tmp/legos.pdf'}}
+        )
+        _, kwargs = mock_automation.fill_reimbursement_expenses.call_args
+        assert kwargs['additional_files'] == {'receipt': [{'name': 'legos2.pdf', 'path': '/tmp/legos2.pdf'}]}
+
+    @patch('app.automation.ClassWalletAutomation')
     def test_reimbursement_login_failure(self, mock_automation_class):
         """Test Reimbursement fails gracefully if login fails"""
         mock_automation = MagicMock()

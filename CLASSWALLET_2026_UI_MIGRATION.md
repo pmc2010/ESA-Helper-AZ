@@ -2,12 +2,27 @@
 
 ## ⏭️ Resume here if this session gets interrupted
 
-**Update 2026-07-27: PDF-invoice zero-line-item bug found and fixed, not yet retried live.** A
-real Reimbursement submission got stuck on a PDF receipt (Amazon order confirmation) - IDP's scan
-produced zero line items instead of at least one, which `fill_direct_pay_expenses`/
-`fill_reimbursement_expenses` both assumed always existed. Fixed with `_ensure_line_item_exists()`
-(clicks "+ Add Expense" when the Details table is empty), applied to both methods. See item 3 in
-"Not done yet" below for the full writeup. **Next submission attempt should confirm this works.**
+**Update 2026-07-27 (part 2): confirmed the zero-line-item fix works live, found + fixed a new
+bug.** The `_ensure_line_item_exists()` fix from part 1 worked - a single-PDF Reimbursement
+(Evelyn Curtis, `20260726_amazon_legos.pdf`) got all the way to "Review page ready." A second
+submission (Mary Curtis) then got stuck on step 1 itself, uploading **two** PDF receipts
+(`legos.pdf` + `legos2.pdf`) together for one purchase - IDP scan never completed within 30s.
+Diagnosed live: ClassWallet's Upload Invoice dropzone only accepts a single file (confirmed by
+the user manually selecting both and getting ClassWallet's own "only 1 file can be submitted"
+error) - our code was sending both file paths in one `send_keys()` call. Fixed with a new
+`_split_invoice_files()` helper (`app/automation.py`) shared by both Direct Pay and
+Reimbursement's orchestrator methods: only the *first* file under the primary invoice/receipt
+type goes to step 1; any extra files of that same type now get routed to step 2's "Additional
+Documentation" dropzone instead, which does support multiple files. 2 new tests added (137
+total passing). **Not yet retried live** - diagnosed and fixed from logs + a live DOM check, but
+the fix itself hasn't been exercised against a real multi-file submission yet.
+
+**Update 2026-07-27 (part 1): PDF-invoice zero-line-item bug found and fixed, confirmed live
+(see part 2 above).** A real Reimbursement submission got stuck on a PDF receipt (Amazon order
+confirmation) - IDP's scan produced zero line items instead of at least one, which
+`fill_direct_pay_expenses`/`fill_reimbursement_expenses` both assumed always existed. Fixed with
+`_ensure_line_item_exists()` (clicks "+ Add Expense" when the Details table is empty), applied
+to both methods. See item 3 in "Not done yet" below for the full writeup.
 
 **Update 2026-07-24 ~22:25: WORKING.** Live retry succeeded end-to-end with the delete-confirmation
 fix in place - a real Reimbursement (multi-item receipt collapsed to one line item, invoice +
@@ -352,6 +367,14 @@ Full suite: 119/119 passing.
    confirmed). Added `month_pending`/`ytd_pending` counts to the response, surfaced as a small
    "Pending Review in ClassWallet" metric card on `reports.html` (only shown when count > 0) so
    the totals don't just silently look lower with no explanation.
+8. **Zero-line-item scans and single-file Upload Invoice limit (2026-07-27)**: PDF receipts
+   surfaced two real bugs the JPG-only testing never hit - see the "Resume here" updates at the
+   top of this file. Fixed: `_ensure_line_item_exists()` (adds a line item if IDP's scan produced
+   none) and `_split_invoice_files()` (only the first file of the primary invoice/receipt type
+   goes to step 1; extras go to step 2's Additional Documentation instead, since ClassWallet
+   rejects more than one file there with an explicit error). Both fixes apply to Direct Pay too
+   (shares the identical wizard engine) even though Direct Pay hasn't specifically hit either
+   case in testing yet.
 
 ## Privacy note
 
