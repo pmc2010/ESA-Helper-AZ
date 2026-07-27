@@ -2,20 +2,14 @@
 
 ## ⏭️ Resume here if this session gets interrupted
 
-**Update 2026-07-27 (part 2): confirmed the zero-line-item fix works live, found + fixed a new
-bug.** The `_ensure_line_item_exists()` fix from part 1 worked - a single-PDF Reimbursement
-(Evelyn Curtis, `20260726_amazon_legos.pdf`) got all the way to "Review page ready." A second
-submission (Mary Curtis) then got stuck on step 1 itself, uploading **two** PDF receipts
-(`legos.pdf` + `legos2.pdf`) together for one purchase - IDP scan never completed within 30s.
-Diagnosed live: ClassWallet's Upload Invoice dropzone only accepts a single file (confirmed by
-the user manually selecting both and getting ClassWallet's own "only 1 file can be submitted"
-error) - our code was sending both file paths in one `send_keys()` call. Fixed with a new
-`_split_invoice_files()` helper (`app/automation.py`) shared by both Direct Pay and
-Reimbursement's orchestrator methods: only the *first* file under the primary invoice/receipt
-type goes to step 1; any extra files of that same type now get routed to step 2's "Additional
-Documentation" dropzone instead, which does support multiple files. 2 new tests added (137
-total passing). **Not yet retried live** - diagnosed and fixed from logs + a live DOM check, but
-the fix itself hasn't been exercised against a real multi-file submission yet.
+**Update 2026-07-27 (part 2): WORKING - confirmed live.** The Mary Curtis Reimbursement (two
+PDF receipts, `legos.pdf` + `legos2.pdf`, for one purchase) that got stuck uploading both files
+at once now succeeds with `_split_invoice_files()` in place (only the first file goes to step
+1's Upload Invoice; the second is routed to step 2's Additional Documentation dropzone instead,
+confirmed live via ClassWallet's own "only 1 file can be submitted" error on step 1). Combined
+with the zero-line-item fix from part 1 (also confirmed live, Evelyn Curtis), both PDF-specific
+bugs found today are fixed and verified against real submissions. 2 new tests added (137 total
+passing).
 
 **Update 2026-07-27 (part 1): PDF-invoice zero-line-item bug found and fixed, confirmed live
 (see part 2 above).** A real Reimbursement submission got stuck on a PDF receipt (Amazon order
