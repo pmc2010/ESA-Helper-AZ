@@ -17,6 +17,10 @@ let formData = {};
 let selectedFiles = {};
 let templates = [];
 let vendors = [];
+// True while an automated (non-manual) /api/submit call is in flight - used so closing the
+// Confirm Submission modal (Cancel button, X button, Escape, backdrop click) while this is
+// true actually halts the ClassWallet browser automation instead of just hiding the modal.
+let submissionInProgress = false;
 
 /**
  * Get today's date in local timezone as YYYY-MM-DD format
@@ -384,13 +388,25 @@ function initializeForm() {
     // Confirmation
     document.getElementById('confirmSubmitBtn').addEventListener('click', confirmSubmit);
 
-    // Reset button state when confirmation modal is dismissed (Cancel button or Close button)
+    // Reset button state when confirmation modal is dismissed (Cancel button or Close button).
+    // If a submission was actually in progress at that point (not just reviewing before
+    // submitting), also cancel it server-side - otherwise Cancel silently does nothing to
+    // the already-running ClassWallet automation.
     const confirmationModal = document.getElementById('confirmationModal');
     if (confirmationModal) {
         confirmationModal.addEventListener('hidden.bs.modal', function() {
+            if (submissionInProgress) {
+                cancelInProgressSubmission();
+            }
+
             const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
             confirmSubmitBtn.disabled = false;
             confirmSubmitBtn.textContent = 'Submit to ClassWallet';
+
+            const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+            if (confirmCancelBtn) {
+                confirmCancelBtn.textContent = 'Cancel';
+            }
         });
     }
 
@@ -1309,13 +1325,35 @@ async function confirmSubmit() {
     try {
         // Use different endpoint for manual vs automated submissions
         const endpoint = isManualEntry ? '/api/manual-submission' : '/api/submit';
+
+        // /api/submit blocks server-side for the entire ClassWallet browser automation, so
+        // this fetch won't resolve until it either finishes, is canceled (see
+        // cancelInProgressSubmission(), triggered by closing this modal while this flag is
+        // set), or you close the automated browser window yourself. Manual entries resolve
+        // immediately and don't touch ClassWallet, so there's nothing to cancel for those.
+        if (!isManualEntry) {
+            submissionInProgress = true;
+            const confirmCancelBtn = document.getElementById('confirmCancelBtn');
+            if (confirmCancelBtn) {
+                confirmCancelBtn.textContent = 'Cancel Submission';
+            }
+        }
+
         const response = await fetch(endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(submitData)
         });
 
+        submissionInProgress = false;
         const result = await response.json();
+
+        if (result.canceled) {
+            // Already handled by cancelInProgressSubmission() when Cancel was clicked -
+            // the button/modal state was reset then, so there's nothing more to show here.
+            console.log('Submission was canceled:', result);
+            return;
+        }
 
         // Check result.success, not just the HTTP status - /api/submit always returns 200
         // even when the automation failed or (when auto-submit is off) never actually
@@ -1385,6 +1423,7 @@ async function confirmSubmit() {
             confirmSubmitBtn.textContent = originalBtnText;
         }
     } catch (error) {
+        submissionInProgress = false;
         console.error('Error submitting form:', error);
 
         // Hide confirmation modal before showing error modal
@@ -1402,6 +1441,30 @@ async function confirmSubmit() {
         // Re-enable button on error so user can try again
         confirmSubmitBtn.disabled = false;
         confirmSubmitBtn.textContent = originalBtnText;
+    }
+}
+
+/**
+ * Cancel a ClassWallet submission that's currently in progress (the confirmSubmit() fetch
+ * is still awaiting /api/submit). Closes the automated browser server-side, which halts
+ * whatever step it's on; the original fetch will resolve shortly after with a canceled
+ * result that confirmSubmit() already knows to ignore (see the `result.canceled` check).
+ * Resets the button state immediately rather than waiting for that, since the browser
+ * quitting can take a moment to fully unwind server-side.
+ */
+function cancelInProgressSubmission() {
+    console.log('Canceling in-progress submission...');
+    submissionInProgress = false;
+
+    fetch('/api/cancel-submission', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => console.log('Cancel response:', data))
+        .catch(error => console.error('Error canceling submission:', error));
+
+    const confirmSubmitBtn = document.getElementById('confirmSubmitBtn');
+    if (confirmSubmitBtn) {
+        confirmSubmitBtn.disabled = false;
+        confirmSubmitBtn.textContent = 'Submit to ClassWallet';
     }
 }
 

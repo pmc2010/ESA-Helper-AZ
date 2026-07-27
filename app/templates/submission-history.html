@@ -302,6 +302,7 @@
                                 <div>
                                     <span class="badge ${statusClass} status-badge">${statusText}</span>
                                     ${isManual ? '<span class="badge badge-manual ms-2">Manual Entry</span>' : '<span class="badge bg-secondary ms-2">' + (type === 'direct_pay' ? 'Direct Pay' : 'Reimbursement') + '</span>'}
+                                    ${status === 'pending' ? `<button type="button" class="btn btn-sm btn-outline-success ms-2 py-0" onclick="event.stopPropagation(); markSubmissionSubmitted('${timestamp}');">Mark as Submitted</button>` : ''}
                                 </div>
                             </div>
                             <div class="row">
@@ -400,6 +401,7 @@
                                     <span class="detail-value">
                                         ${submission.auto_submitted === false ? `
                                             <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                            <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
                                         ` : `
                                             <span class="badge ${submission.success !== false ? 'bg-success' : 'bg-danger'}">
                                                 ${submission.success !== false ? 'Successful' : 'Failed'}
@@ -511,6 +513,26 @@
                 console.error('Error:', error);
                 alert('Error deleting submission: ' + error.message);
             });
+        }
+
+        function markSubmissionSubmitted(timestamp) {
+            if (!confirm('Confirm this request was actually submitted in ClassWallet?')) return;
+            fetch(`/api/submission/${timestamp}/mark-submitted`, { method: 'PUT' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('submissionModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                        loadSubmissionHistory();
+                    } else {
+                        alert('Error: ' + (data.message || data.error));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error marking submission as submitted: ' + error.message);
+                });
         }
 
         function deleteMultipleSubmissions(timestamps) {

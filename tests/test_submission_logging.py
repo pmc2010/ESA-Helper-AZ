@@ -5,7 +5,7 @@ import json
 import tempfile
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from app.utils import log_submission, get_submission_history
+from app.utils import log_submission, get_submission_history, mark_submission_submitted
 
 
 class TestSubmissionLogging:
@@ -242,3 +242,32 @@ class TestSubmissionLogging:
             logged = json.load(f)
             # Fields should be present but may be None or missing
             assert logged['type'] == 'direct_pay'
+
+
+class TestMarkSubmissionSubmitted:
+    """Test manually confirming a pending-review submission was actually submitted"""
+
+    def test_mark_submission_submitted_flips_flag(self):
+        """auto_submitted should flip from False to True for the matching timestamp"""
+        submission_data = {
+            'type': 'reimbursement',
+            'student': 'Student A',
+            'store_name': 'Test Store',
+            'amount': '33.55',
+            'po_number': '20260725_1727',
+            'auto_submitted': False
+        }
+        log_submission(submission_data, created_by='test')
+        timestamp = submission_data['timestamp']
+
+        assert mark_submission_submitted(timestamp) is True
+
+        history = get_submission_history()
+        updated = next(s for s in history if s.get('timestamp') == timestamp)
+        assert updated['auto_submitted'] is True
+
+    def test_mark_submission_submitted_unknown_timestamp_returns_false(self):
+        """Marking a timestamp that doesn't exist should fail gracefully"""
+        log_submission({'type': 'reimbursement', 'student': 'Student A', 'auto_submitted': False}, created_by='test')
+
+        assert mark_submission_submitted('does_not_exist') is False

@@ -9,7 +9,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 from app import utils
-from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions
+from app.utils import load_config, load_templates, load_student_templates, load_vendors, generate_po_number, save_student_template, delete_student_template, split_pdf, get_temp_files, delete_temp_file, cleanup_old_temp_files, get_submission_history, delete_submission, delete_all_submissions, mark_submission_submitted
 from app.invoice_generator import (
     InvoiceGenerator, load_vendor_profiles, load_student_profiles,
     get_vendor, get_student, save_vendor_profile, save_student_profile,
@@ -610,6 +610,29 @@ def delete_submission_endpoint(timestamp):
         }), 500
 
 
+@api_bp.route('/submission/<timestamp>/mark-submitted', methods=['PUT'])
+def mark_submission_submitted_endpoint(timestamp):
+    """Mark a pending-review submission as actually submitted in ClassWallet"""
+    try:
+        success = mark_submission_submitted(timestamp)
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Submission {timestamp} marked as submitted'
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Could not mark submission {timestamp} as submitted'
+            }), 404
+    except Exception as e:
+        logger.error(f"Error marking submission {timestamp} as submitted: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @api_bp.route('/submissions/delete-all', methods=['DELETE'])
 def delete_all_submissions_endpoint():
     """Delete all submissions from history"""
@@ -993,6 +1016,24 @@ def submit_reimbursement():
     result = submit_to_classwallet(data, auto_submit=auto_submit)
 
     return jsonify(result)
+
+
+@api_bp.route('/cancel-submission', methods=['POST'])
+def cancel_submission():
+    """
+    Cancel the currently in-progress ClassWallet submission (if any) by closing its
+    browser window. Requires the Flask app to run with threaded=True, since /api/submit
+    blocks for the entire automation - this request has to be handled concurrently with
+    that one to actually interrupt it.
+    """
+    from app.automation import cancel_active_submission
+
+    canceled = cancel_active_submission()
+    return jsonify({
+        'success': True,
+        'canceled': canceled,
+        'message': 'Submission canceled.' if canceled else 'No submission was in progress.'
+    })
 
 
 @api_bp.route('/manual-submission', methods=['POST'])

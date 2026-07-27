@@ -241,6 +241,21 @@ this. The UI (Recent Submissions sidebar, Submission History page) shows a "Pend
 ClassWallet" badge instead of claiming success when `auto_submitted` is `false`. Older log
 entries predate this field and are treated as submitted (not retroactively flagged).
 
+**Canceling an in-progress submission:** `/api/submit` blocks server-side for the entire
+automation, so the Flask app runs with `threaded=True` (`main.py`) to let a concurrent
+`POST /api/cancel-submission` request reach it. That endpoint calls
+`app.automation.cancel_active_submission()`, which quits the currently-active browser -
+whatever Selenium step was mid-flight then fails, which `submit_to_classwallet()` recognizes
+and reports as an explicit cancellation (`error_code: 'CANCELED'`) rather than a generic
+failure. The frontend triggers this from the Confirm Submission modal's `hidden.bs.modal`
+event (fires for Cancel, the X button, Escape, and backdrop click alike) whenever a
+submission was actually in flight at that moment. Safe as long as `auto_submit=False` (the
+default) - ClassWallet's own Submit is never clicked without it. With `auto_submit=True`,
+canceling in the ~1-2s window while `submit_wizard()` is actively clicking Submit and waiting
+for confirmation could theoretically interrupt after ClassWallet already registered the
+click, leaving ESA Helper's record out of sync with ClassWallet - not fixed, since closing
+that race would need locking around the exact click moment for a rare edge case.
+
 ### Invoice Generation (Optional)
 
 ```

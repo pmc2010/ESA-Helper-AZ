@@ -7,12 +7,59 @@ Coordinates the full workflow: loading credentials, logging in, and submitting f
 import logging
 import json
 import time
+import threading
 from pathlib import Path
 from typing import Dict, Optional
 from app.classwallet import ClassWalletAutomation
 from app.utils import load_config, log_submission
 
 logger = logging.getLogger(__name__)
+
+# Tracks the single in-progress submission (if any) so a concurrent "cancel" request can
+# reach in and stop it. ESA Helper is single-user/single-browser by design (see CLAUDE.md),
+# so one global slot is sufficient - no per-session tracking needed. Requires the Flask app
+# to run with threaded=True, since the request handling submit_to_classwallet() blocks for
+# the entire automation and can't otherwise receive a second (cancel) request concurrently.
+_active_lock = threading.Lock()
+_active_orchestrator: Optional['SubmissionOrchestrator'] = None
+_cancel_requested = False
+
+
+def cancel_active_submission() -> bool:
+    """
+    Cancel the currently in-progress submission, if any, by quitting its browser. The
+    Selenium call that was mid-flight in the automation thread will raise an exception as
+    a result, which propagates up through the existing per-step error handling and causes
+    submit_to_classwallet() to return a 'canceled' result instead of hanging or silently
+    treating it as a plain failure.
+
+    Returns:
+        bool: True if a submission was actually canceled, False if none was active.
+    """
+    global _cancel_requested
+    with _active_lock:
+        orchestrator = _active_orchestrator
+        if orchestrator is None:
+            return False
+        _cancel_requested = True
+
+    try:
+        if orchestrator.automation:
+            orchestrator.automation.close()
+    except Exception as e:
+        logger.warning(f"Error closing browser during cancellation: {str(e)}")
+
+    logger.info("Submission cancellation requested - browser closed")
+    return True
+
+
+def _canceled_response() -> Dict:
+    return {
+        'success': False,
+        'message': 'Submission canceled.',
+        'error_code': 'CANCELED',
+        'canceled': True
+    }
 
 
 class SubmissionOrchestrator:
@@ -354,6 +401,38 @@ class SubmissionOrchestrator:
             logger.info("Automation closed")
 
 
+def _wait_for_browser_close(orchestrator: 'SubmissionOrchestrator', response: Dict) -> Dict:
+    """
+    Block until the automated browser is closed - either by the user, or by
+    cancel_active_submission() quitting it - then return the appropriate response
+    (overriding with a canceled result if cancellation was requested for this submission).
+    """
+    global _cancel_requested
+
+    logger.info("=" * 60)
+    logger.info("BROWSER WILL REMAIN OPEN INDEFINITELY")
+    logger.info("Close the browser manually when done reviewing")
+    logger.info("=" * 60)
+
+    try:
+        while True:
+            try:
+                # Check if browser is still alive by trying a simple operation
+                # This will throw an exception if the browser was closed
+                if orchestrator.automation and orchestrator.automation.driver:
+                    orchestrator.automation.driver.current_url
+                time.sleep(0.5)
+            except Exception as browser_check_error:
+                if _cancel_requested:
+                    logger.info("Submission canceled by user - browser closed")
+                    return _canceled_response()
+                logger.info(f"Browser closed by user (detected: {type(browser_check_error).__name__})")
+                return response
+    except KeyboardInterrupt:
+        logger.info("Browser session closed by user (Ctrl+C)")
+        return response
+
+
 def submit_to_classwallet(submission_data: Dict, auto_submit: bool = False) -> Dict:
     """
     Main function to submit to ClassWallet
@@ -365,118 +444,102 @@ def submit_to_classwallet(submission_data: Dict, auto_submit: bool = False) -> D
     Returns:
         dict: Result status and message
     """
+    global _active_orchestrator, _cancel_requested
+
     orchestrator = SubmissionOrchestrator()
+    with _active_lock:
+        _active_orchestrator = orchestrator
+        _cancel_requested = False
 
     try:
-        # Load credentials
-        if not orchestrator.load_credentials():
-            return {
-                'success': False,
-                'message': orchestrator.last_error or 'Credentials not configured. Please configure your ClassWallet credentials.',
-                'error_code': 'CREDENTIALS_ERROR'
-            }
+        try:
+            # Load credentials
+            if not orchestrator.load_credentials():
+                return {
+                    'success': False,
+                    'message': orchestrator.last_error or 'Credentials not configured. Please configure your ClassWallet credentials.',
+                    'error_code': 'CREDENTIALS_ERROR'
+                }
 
-        # Initialize automation
-        if not orchestrator.initialize_automation(headless=False):
-            return {
-                'success': False,
-                'message': orchestrator.last_error or 'Failed to initialize browser automation',
-                'error_code': 'AUTOMATION_ERROR'
-            }
+            # Initialize automation
+            if not orchestrator.initialize_automation(headless=False):
+                return {
+                    'success': False,
+                    'message': orchestrator.last_error or 'Failed to initialize browser automation',
+                    'error_code': 'AUTOMATION_ERROR'
+                }
 
-        # Login to ClassWallet
-        if not orchestrator.login():
-            # DISABLED FOR DEBUGGING: orchestrator.close()
-            return {
-                'success': False,
-                'message': orchestrator.last_error or 'Failed to login to ClassWallet',
-                'error_code': 'LOGIN_ERROR'
-            }
+            # Login to ClassWallet
+            if not orchestrator.login():
+                # DISABLED FOR DEBUGGING: orchestrator.close()
+                return {
+                    'success': False,
+                    'message': orchestrator.last_error or 'Failed to login to ClassWallet',
+                    'error_code': 'LOGIN_ERROR'
+                }
 
-        # Submit based on request type
-        request_type = submission_data.get('request_type')
-        if request_type == 'Reimbursement':
-            success = orchestrator.submit_reimbursement(submission_data, auto_submit=auto_submit)
-        elif request_type == 'Direct Pay':
-            success = orchestrator.submit_direct_pay(submission_data, auto_submit=auto_submit)
-        else:
-            # DISABLED FOR DEBUGGING: orchestrator.close()
-            return {
-                'success': False,
-                'message': 'Invalid request type',
-                'error_code': 'INVALID_REQUEST'
-            }
-
-        # DISABLED FOR DEBUGGING: orchestrator.close()
-
-        # Prepare response based on success
-        if success:
-            if auto_submit:
-                message = 'Submission successful!'
+            # Submit based on request type
+            request_type = submission_data.get('request_type')
+            if request_type == 'Reimbursement':
+                success = orchestrator.submit_reimbursement(submission_data, auto_submit=auto_submit)
+            elif request_type == 'Direct Pay':
+                success = orchestrator.submit_direct_pay(submission_data, auto_submit=auto_submit)
             else:
-                message = 'Form complete and ready for review. Please manually confirm the submission in ClassWallet.'
-            response = {
-                'success': True,
-                'message': message,
-                'po_number': submission_data.get('po_number'),
-                'auto_submitted': auto_submit
-            }
-        else:
-            response = {
+                # DISABLED FOR DEBUGGING: orchestrator.close()
+                return {
+                    'success': False,
+                    'message': 'Invalid request type',
+                    'error_code': 'INVALID_REQUEST'
+                }
+
+            # DISABLED FOR DEBUGGING: orchestrator.close()
+
+            # If the browser was closed via cancel_active_submission() while one of the
+            # steps above was mid-flight, that step will have failed (its Selenium call
+            # raised once the driver quit) - report this as an explicit cancellation
+            # rather than a generic submission failure.
+            if _cancel_requested:
+                logger.info("Submission canceled by user - stopped mid-step")
+                return _canceled_response()
+
+            # Prepare response based on success
+            if success:
+                if auto_submit:
+                    message = 'Submission successful!'
+                else:
+                    message = 'Form complete and ready for review. Please manually confirm the submission in ClassWallet.'
+                response = {
+                    'success': True,
+                    'message': message,
+                    'po_number': submission_data.get('po_number'),
+                    'auto_submitted': auto_submit
+                }
+            else:
+                response = {
+                    'success': False,
+                    'message': orchestrator.last_error or 'Submission failed. Check logs for details.',
+                    'error_code': 'SUBMISSION_ERROR'
+                }
+
+            # Keep browser open indefinitely for user review and manual submission
+            return _wait_for_browser_close(orchestrator, response)
+
+        except Exception as e:
+            # DISABLED FOR DEBUGGING: orchestrator.close()
+            logger.error(f"Error in submit_to_classwallet: {str(e)}")
+            logger.info("=" * 60)
+            logger.info("BROWSER WILL REMAIN OPEN INDEFINITELY FOR DEBUGGING")
+            logger.info("Close the browser manually when done debugging")
+            logger.info("=" * 60)
+
+            error_response = {
                 'success': False,
-                'message': orchestrator.last_error or 'Submission failed. Check logs for details.',
-                'error_code': 'SUBMISSION_ERROR'
+                'message': orchestrator.last_error or f'Unexpected error: {str(e)}',
+                'error_code': 'UNEXPECTED_ERROR'
             }
 
-        # Keep browser open indefinitely for user review and manual submission
-        logger.info("=" * 60)
-        logger.info("BROWSER WILL REMAIN OPEN INDEFINITELY")
-        logger.info("Close the browser manually when done reviewing")
-        logger.info("=" * 60)
-
-        # Keep the process running, but detect if browser is closed
-        try:
-            while True:
-                try:
-                    # Check if browser is still alive by trying a simple operation
-                    # This will throw an exception if the browser was closed
-                    if orchestrator.automation and orchestrator.automation.driver:
-                        orchestrator.automation.driver.current_url
-                    time.sleep(1)
-                except Exception as browser_check_error:
-                    # Browser was closed (driver no longer responsive)
-                    logger.info(f"Browser closed by user (detected: {type(browser_check_error).__name__})")
-                    return response
-        except KeyboardInterrupt:
-            logger.info("Browser session closed by user (Ctrl+C)")
-            return response
-
-    except Exception as e:
-        # DISABLED FOR DEBUGGING: orchestrator.close()
-        logger.error(f"Error in submit_to_classwallet: {str(e)}")
-        logger.info("=" * 60)
-        logger.info("BROWSER WILL REMAIN OPEN INDEFINITELY FOR DEBUGGING")
-        logger.info("Close the browser manually when done debugging")
-        logger.info("=" * 60)
-
-        error_response = {
-            'success': False,
-            'message': orchestrator.last_error or f'Unexpected error: {str(e)}',
-            'error_code': 'UNEXPECTED_ERROR'
-        }
-
-        # Keep the process running, but detect if browser is closed
-        try:
-            while True:
-                try:
-                    # Check if browser is still alive by trying a simple operation
-                    if orchestrator.automation and orchestrator.automation.driver:
-                        orchestrator.automation.driver.current_url
-                    time.sleep(1)
-                except Exception as browser_check_error:
-                    # Browser was closed (driver no longer responsive)
-                    logger.info(f"Browser closed by user (detected: {type(browser_check_error).__name__})")
-                    return error_response
-        except KeyboardInterrupt:
-            logger.info("Browser session closed by user (Ctrl+C)")
-            return error_response
+            return _wait_for_browser_close(orchestrator, error_response)
+    finally:
+        with _active_lock:
+            if _active_orchestrator is orchestrator:
+                _active_orchestrator = None

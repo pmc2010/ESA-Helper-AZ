@@ -629,13 +629,13 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title">Confirm Submission</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" id="confirmationModalCloseBtn" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body" id="confirmationContent">
                     <!-- Dynamically populated -->
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" id="confirmCancelBtn" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-success btn-lg" id="confirmSubmitBtn">Submit to ClassWallet</button>
                 </div>
             </div>
@@ -1393,7 +1393,10 @@
                             <div>
                                 <h6 class="mb-1" style="font-size: 0.9rem;">${student}</h6>
                                 <small class="text-muted">${vendor}</small>
-                                ${pendingReview ? '<br><span class="badge bg-warning text-dark mt-1">Pending Review in ClassWallet</span>' : ''}
+                                ${pendingReview ? `
+                                    <br><span class="badge bg-warning text-dark mt-1">Pending Review in ClassWallet</span>
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-1 py-0 px-1" style="font-size: 0.7rem;" onclick="event.stopPropagation(); event.preventDefault(); markSubmissionSubmitted('${submission.timestamp}');">Mark as Submitted</button>
+                                ` : ''}
                             </div>
                             <span class="badge bg-success">$${amount}</span>
                         </div>
@@ -1443,6 +1446,7 @@
                                     <div class="col-6 text-end">
                                         ${submission.auto_submitted === false ? `
                                             <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
+                                            <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
                                         ` : `
                                             <span class="badge bg-success">Submitted</span>
                                         `}
@@ -1464,6 +1468,26 @@
                         document.getElementById('submissionDetailsContent').innerHTML = html;
                         new bootstrap.Modal(document.getElementById('submissionDetailsModal')).show();
                     }
+                });
+        }
+
+        function markSubmissionSubmitted(timestamp) {
+            if (!confirm('Confirm this request was actually submitted in ClassWallet?')) return;
+            fetch(`/api/submission/${timestamp}/mark-submitted`, { method: 'PUT' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('submissionDetailsModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                        window.loadRecentSubmissions();
+                    } else {
+                        alert('Error: ' + (data.message || data.error));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error marking submission as submitted: ' + error.message);
                 });
         }
     </script>
