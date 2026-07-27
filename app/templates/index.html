@@ -171,7 +171,7 @@
                                     </label>
                                     <div class="input-group">
                                         <span class="input-group-text">$</span>
-                                        <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0" value="0" required placeholder="0.00" autocomplete="off">
+                                        <input type="text" inputmode="decimal" class="form-control" id="amount" name="amount" value="0" required placeholder="0.00" autocomplete="off">
                                     </div>
                                     <small class="form-text text-muted d-block mt-2">
                                         Enter the amount you paid. Include cents if applicable (e.g., 45.50).
@@ -286,8 +286,8 @@
                                                 <tr class="line-item-row">
                                                     <td><input type="text" class="form-control form-control-sm line-description" placeholder="e.g., Ice skating lesson"></td>
                                                     <td><input type="number" class="form-control form-control-sm line-quantity" value="1" min="1" step="1"></td>
-                                                    <td><input type="number" class="form-control form-control-sm line-unit-price" step="0.01" min="0"></td>
-                                                    <td><input type="number" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
+                                                    <td><input type="text" inputmode="decimal" class="form-control form-control-sm line-unit-price"></td>
+                                                    <td><input type="text" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
                                                     <td><button type="button" class="btn btn-sm btn-outline-danger remove-line-item" onclick="removeLineItem(this)">×</button></td>
                                                 </tr>
                                             </tbody>
@@ -303,7 +303,7 @@
                                                 <p class="mb-2"><strong>Subtotal:</strong> $<span id="subtotalAmount">0.00</span></p>
                                                 <p class="mb-2">
                                                     <strong>Tax Rate (%):</strong>
-                                                    <input type="number" class="form-control form-control-sm d-inline-block" style="width: 80px;" id="invoiceTaxRate" value="0" step="0.01" min="0" max="100" onchange="updateInvoiceTotals()">
+                                                    <input type="text" inputmode="decimal" class="form-control form-control-sm d-inline-block" style="width: 80px;" id="invoiceTaxRate" value="0" onchange="updateInvoiceTotals()">
                                                 </p>
                                                 <p class="mb-0"><strong>Tax:</strong> $<span id="taxAmount">0.00</span></p>
                                             </div>
@@ -513,7 +513,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="editVendorTaxRate" class="form-label">Tax Rate (%) (default for this vendor)</label>
-                            <input type="number" class="form-control" id="editVendorTaxRate" value="0" step="0.01" min="0">
+                            <input type="text" inputmode="decimal" class="form-control" id="editVendorTaxRate" value="0">
                         </div>
                     </form>
                 </div>
@@ -1396,6 +1396,7 @@
                                 ${pendingReview ? `
                                     <br><span class="badge bg-warning text-dark mt-1">Pending Review in ClassWallet</span>
                                     <button type="button" class="btn btn-sm btn-outline-success mt-1 py-0 px-1" style="font-size: 0.7rem;" onclick="event.stopPropagation(); event.preventDefault(); markSubmissionSubmitted('${submission.timestamp}');">Mark as Submitted</button>
+                                    <button type="button" class="btn btn-sm btn-outline-danger mt-1 py-0 px-1" style="font-size: 0.7rem;" onclick="event.stopPropagation(); event.preventDefault(); cancelPendingSubmission('${submission.timestamp}');">Cancel</button>
                                 ` : ''}
                             </div>
                             <span class="badge bg-success">$${amount}</span>
@@ -1447,6 +1448,7 @@
                                         ${submission.auto_submitted === false ? `
                                             <span class="badge bg-warning text-dark">Pending Review in ClassWallet</span>
                                             <br><button type="button" class="btn btn-sm btn-outline-success mt-2" onclick="markSubmissionSubmitted('${submission.timestamp}')">Mark as Submitted</button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger mt-2" onclick="cancelPendingSubmission('${submission.timestamp}')">Cancel</button>
                                         ` : `
                                             <span class="badge bg-success">Submitted</span>
                                         `}
@@ -1488,6 +1490,29 @@
                 .catch(error => {
                     console.error('Error:', error);
                     alert('Error marking submission as submitted: ' + error.message);
+                });
+        }
+
+        function cancelPendingSubmission(timestamp) {
+            // Pending-review entries were never actually confirmed submitted in ClassWallet,
+            // so canceling one just removes the log entry rather than needing a separate
+            // "canceled" status - there's nothing else to track once it's discarded.
+            if (!confirm('Cancel this pending submission? This removes it from your history - it will NOT affect anything in ClassWallet.')) return;
+            fetch(`/api/submission/${timestamp}`, { method: 'DELETE' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const modalEl = document.getElementById('submissionDetailsModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        if (modal) modal.hide();
+                        window.loadRecentSubmissions();
+                    } else {
+                        alert('Error: ' + (data.message || data.error));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error canceling submission: ' + error.message);
                 });
         }
     </script>

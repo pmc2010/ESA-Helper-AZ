@@ -2319,8 +2319,8 @@ function addLineItem() {
     newRow.innerHTML = `
         <td><input type="text" class="form-control form-control-sm line-description" placeholder="e.g., Ice skating lesson"></td>
         <td><input type="number" class="form-control form-control-sm line-quantity" value="1" min="1" step="1" onchange="updateInvoiceTotals()"></td>
-        <td><input type="number" class="form-control form-control-sm line-unit-price" step="0.01" min="0" onchange="updateInvoiceTotals()"></td>
-        <td><input type="number" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
+        <td><input type="text" inputmode="decimal" class="form-control form-control-sm line-unit-price" onchange="updateInvoiceTotals()"></td>
+        <td><input type="text" class="form-control form-control-sm line-total" readonly style="background-color: #f0f0f0;"></td>
         <td><button type="button" class="btn btn-sm btn-outline-danger remove-line-item" onclick="removeLineItem(this)">×</button></td>
     `;
     tbody.appendChild(newRow);
