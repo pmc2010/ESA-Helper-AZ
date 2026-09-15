@@ -1028,8 +1028,14 @@ class ClassWalletAutomation:
         keystrokes get inserted alongside the old value instead of replacing it (this is
         exactly how a pre-filled $2,047.50 became $2,047,502,089.29 the first time around).
 
-        Note: only single line-item submissions are supported for now (rows[0]) - ESA
-        Helper's own form doesn't yet model multiple line items per submission.
+        IDP can split a Direct Pay invoice into multiple rows too (observed with a multi-line
+        vendor invoice - "ESA Member", "Vendor Pay EFT", and "Subscription Billing" line items
+        from a single Alta Climbing invoice), not just Reimbursement receipts as originally
+        assumed. Since ESA Helper's own form only models one lump-sum amount/category per
+        submission, extra rows are collapsed the same way Reimbursement does, and shipping/
+        discount/tax are zeroed so the line item's total matches the submitted amount exactly.
+        Leftover un-categorized rows are a required field ClassWallet won't let Continue past,
+        which is what timed out waiting for the Select Purse step before this fix.
 
         Args:
             vendor_name: Known vendor name to overwrite the "Vendor" field with
@@ -1089,7 +1095,15 @@ class ClassWalletAutomation:
                 logger.error("❌ Could not create a line item to fill in")
                 return False
 
-            logger.info(f"5. Overwriting line item amount with: ${amount}")
+            logger.info("5. Collapsing to a single line item...")
+            try:
+                self._collapse_to_single_line_item()
+            except Exception as e:
+                logger.error(f"Could not collapse to a single line item: {str(e)}")
+                self._log_error_with_context("fill_direct_pay_expenses:collapse_rows", e)
+                return False
+
+            logger.info(f"6. Overwriting line item amount with: ${amount}")
             try:
                 price_field = self.wait.until(
                     EC.presence_of_element_located((By.NAME, "rows[0].price"))
@@ -1099,6 +1113,13 @@ class ClassWalletAutomation:
                 qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
                 if not (qty_field.get_attribute("value") or "").strip():
                     qty_field.send_keys("1")
+
+                # rows[0].total is a separate field from price/quantity, not derived from
+                # them client-side - it keeps whatever IDP scanned unless overwritten
+                # explicitly (observed: price overwritten to $77.02 but total silently
+                # stayed at IDP's original $74.00, which is what fed the Subtotal/Total).
+                total_field = self.driver.find_element(By.NAME, "rows[0].total")
+                self._force_set_field_value(total_field, str(amount))
 
                 description_field = self.driver.find_element(By.NAME, "rows[0].description")
                 if not (description_field.get_attribute("value") or "").strip():
@@ -1110,13 +1131,24 @@ class ClassWalletAutomation:
                 self._log_error_with_context("fill_direct_pay_expenses:amount", e)
                 return False
 
-            logger.info(f"6. Selecting expense category: {category}...")
+            logger.info(f"7. Selecting expense category: {category}...")
             if not self._select_line_item_category(category):
                 logger.error(f"❌ Could not select expense category '{category}'")
                 return False
 
+            logger.info("8. Zeroing shipping, discount, and tax...")
+            try:
+                for field_name in ("shipping", "discount", "tax"):
+                    field = self.driver.find_element(By.NAME, field_name)
+                    self._force_set_field_value(field, "0.00")
+                logger.info("✓ Shipping/discount/tax zeroed")
+            except Exception as e:
+                logger.error(f"Could not zero shipping/discount/tax: {str(e)}")
+                self._log_error_with_context("fill_direct_pay_expenses:totals", e)
+                return False
+
             if additional_files:
-                logger.info("7. Uploading additional documentation...")
+                logger.info("9. Uploading additional documentation...")
                 extra_paths = self._extract_file_paths(additional_files)
                 if extra_paths is None:
                     return False
@@ -1130,7 +1162,7 @@ class ClassWalletAutomation:
                     self._log_error_with_context("fill_direct_pay_expenses:additional_files", e)
                     return False
 
-            logger.info("8. Clicking Continue...")
+            logger.info("10. Clicking Continue...")
             try:
                 continue_button = self.wait.until(
                     EC.element_to_be_clickable((
@@ -1299,6 +1331,14 @@ class ClassWalletAutomation:
                 qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
                 if not (qty_field.get_attribute("value") or "").strip():
                     qty_field.send_keys("1")
+
+                # rows[0].total is a separate field from price/quantity, not derived from
+                # them client-side - it keeps whatever IDP scanned unless overwritten
+                # explicitly (see fill_direct_pay_expenses for the observed symptom: price
+                # overwritten correctly but total silently kept IDP's original scanned
+                # value, which is what actually feeds Subtotal/Total).
+                total_field = self.driver.find_element(By.NAME, "rows[0].total")
+                self._force_set_field_value(total_field, str(amount))
 
                 description_field = self.driver.find_element(By.NAME, "rows[0].description")
                 self._force_set_field_value(description_field, comment or category)

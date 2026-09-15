@@ -226,9 +226,10 @@ Each step has extensive logging. Check console or `logs/` for debugging.
   just clicks "Start a new Reimbursement" and lands there directly.
 - Direct Pay's Manage Expenses page has a "User Name" field (filled with the selected student's
   name); Reimbursement's does not.
-- Reimbursement collapses IDP's line items to one and zeroes shipping/discount/tax;
-  Direct Pay assumes IDP already produced exactly one line item (not yet generalized to
-  multi-item Direct Pay invoices).
+- Both Reimbursement and Direct Pay collapse IDP's line items down to one and zero
+  shipping/discount/tax, since ESA Helper only models a single lump-sum amount/category per
+  submission. (Direct Pay originally assumed IDP always produced exactly one line item, but a
+  multi-line vendor invoice proved that wrong - see "September 2026" below.)
 - Direct Pay requires vendors to be configured with a `classwallet_search_term` for automated
   lookup (`name`, `classwallet_search_term`, plus other business info like email/tax rate). If a
   vendor lacks `classwallet_search_term`, the user can't select it for Direct Pay and sees a
@@ -527,6 +528,23 @@ ESA-Helper-AZ/
 
 ## Recent Updates
 
+### September 2026 - Direct Pay Multi-Line-Item Fix
+- ✓ Fixed `fill_direct_pay_expenses()` getting stuck on Manage Expenses (Continue never
+  advanced to Select Purse): a multi-line vendor invoice caused IDP to scan 3 line-item rows
+  instead of 1, and only `rows[0]` was ever overwritten - the extra rows were left with a
+  required "Expense Category" unset, which silently blocked ClassWallet's Continue button
+- ✓ Direct Pay now collapses IDP's line items to one and zeroes shipping/discount/tax, same as
+  Reimbursement already did (`_collapse_to_single_line_item()` is shared between both flows)
+- ✓ Fixed a second bug this surfaced: `rows[0].total` (`data-test="total"`) is a field
+  independent of `rows[0].price`/`rows[0].quantity` - it is NOT client-side computed as
+  price × qty as the original 2026-07-24 migration notes assumed. Overwriting price alone left
+  `total` at whatever IDP originally scanned for that row, so the submitted Subtotal/Total
+  silently didn't match ESA Helper's amount ($74.00 shown instead of $77.02). Both
+  `fill_direct_pay_expenses()` and `fill_reimbursement_expenses()` now force-set `rows[0].total`
+  explicitly alongside price/quantity.
+- See `app/classwallet.py`'s `fill_direct_pay_expenses()` and `logs/automation_20260827.log`
+  (despite the filename, contains the Sept 7 failure) for the original symptom
+
 ### November 2025 - Direct Pay Automation Complete
 - ✓ Full Direct Pay submission workflow implemented and tested
 - ✓ Vendor search term configuration for automated lookup
@@ -570,8 +588,9 @@ ESA-Helper-AZ/
 
 ## Last Updated
 
-July 2026 - Direct Pay and Reimbursement rewritten for ClassWallet's 2026/2027 UI redesign,
-submission history status accuracy fixed (126 tests passing)
+September 2026 - Direct Pay now collapses multi-line-item IDP scans to one row and zeroes
+shipping/discount/tax, matching Reimbursement's existing behavior; both flows now also
+overwrite the line item's independent `rows[0].total` field, not just price/quantity
 
 ---
 
