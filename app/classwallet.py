@@ -1110,9 +1110,11 @@ class ClassWalletAutomation:
                 )
                 self._force_set_field_value(price_field, str(amount))
 
+                # Always force Qty to 1 - IDP can scan a quantity >1 (e.g. multiple units
+                # on one line item), but ESA Helper's amount is a single lump sum, not a
+                # per-unit price, so a scanned qty would multiply the submitted total.
                 qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
-                if not (qty_field.get_attribute("value") or "").strip():
-                    qty_field.send_keys("1")
+                self._force_set_field_value(qty_field, "1")
 
                 # rows[0].total is a separate field from price/quantity, not derived from
                 # them client-side - it keeps whatever IDP scanned unless overwritten
@@ -1328,9 +1330,11 @@ class ClassWalletAutomation:
                 )
                 self._force_set_field_value(price_field, str(amount))
 
+                # Always force Qty to 1 - IDP can scan a quantity >1 (e.g. multiple units
+                # on one line item), but ESA Helper's amount is a single lump sum, not a
+                # per-unit price, so a scanned qty would multiply the submitted total.
                 qty_field = self.driver.find_element(By.NAME, "rows[0].quantity")
-                if not (qty_field.get_attribute("value") or "").strip():
-                    qty_field.send_keys("1")
+                self._force_set_field_value(qty_field, "1")
 
                 # rows[0].total is a separate field from price/quantity, not derived from
                 # them client-side - it keeps whatever IDP scanned unless overwritten
