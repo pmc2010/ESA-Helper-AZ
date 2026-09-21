@@ -1158,6 +1158,8 @@ class ClassWalletAutomation:
                     extra_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
                     extra_input.send_keys('\n'.join(extra_paths))
                     time.sleep(1)
+                    if not self.handle_image_editor_modal():
+                        return False
                     logger.info("✓ Additional documentation uploaded")
                 except Exception as e:
                     logger.error(f"Could not upload additional documentation: {str(e)}")
@@ -1378,6 +1380,8 @@ class ClassWalletAutomation:
                     extra_input = self.driver.find_element(By.XPATH, "//input[@type='file']")
                     extra_input.send_keys('\n'.join(extra_paths))
                     time.sleep(1)
+                    if not self.handle_image_editor_modal():
+                        return False
                     logger.info("✓ Additional documentation uploaded")
                 except Exception as e:
                     logger.error(f"Could not upload additional documentation: {str(e)}")
