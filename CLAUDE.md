@@ -539,7 +539,7 @@ ESA-Helper-AZ/
   independent of `rows[0].price`/`rows[0].quantity` - it is NOT client-side computed as
   price × qty as the original 2026-07-24 migration notes assumed. Overwriting price alone left
   `total` at whatever IDP originally scanned for that row, so the submitted Subtotal/Total
-  silently didn't match ESA Helper's amount ($74.00 shown instead of $77.02). Both
+  silently didn't match ESA Helper's amount. Both
   `fill_direct_pay_expenses()` and `fill_reimbursement_expenses()` now force-set `rows[0].total`
   explicitly alongside price/quantity.
 - See `app/classwallet.py`'s `fill_direct_pay_expenses()` and `logs/automation_20260827.log`
