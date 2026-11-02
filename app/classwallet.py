@@ -789,7 +789,8 @@ class ClassWalletAutomation:
         then handle ClassWallet's Intelligent Document Processing (IDP) scan, which replaced
         the old "resize/rotate -> Save" image editor modal with a "Scan Receipt" button
         (same underlying data-test='Save' selector - see handle_image_editor_modal()).
-        Scanning auto-advances to step 2 ("Manage Expenses") when done.
+        Scanning auto-advances to step 2 ("Manage Expenses") when done; if the scan fails,
+        "Continue with manual process" is clicked to reach the same step with blank fields.
 
         Args:
             file_paths: Dictionary of {file_type: file_path} OR {file_type: {name, path, size}}
@@ -833,15 +834,27 @@ class ClassWalletAutomation:
             # IDP scanning takes a few seconds and auto-advances to step 2 when done
             logger.info("4. Waiting for Intelligent Document Processing (IDP) scan to complete...")
             try:
+                # If IDP can't parse the file it stays on this step and shows an "Unable to
+                # Read Invoice or Receipt" error instead of advancing. Manual entry leads to
+                # the same Manage Expenses page, whose fill step already handles blank fields.
+                manual_process_xpath = "//button[contains(., 'Continue with manual process')]"
                 wait_30s = WebDriverWait(self.driver, 30)
-                wait_30s.until(lambda d: 'manage-expenses' in d.current_url)
-                logger.info("✓ IDP scan complete, landed on Manage Expenses step")
+                wait_30s.until(lambda d: 'manage-expenses' in d.current_url
+                               or d.find_elements(By.XPATH, manual_process_xpath))
+
+                if 'manage-expenses' in self.driver.current_url:
+                    logger.info("✓ IDP scan complete, landed on Manage Expenses step")
+                else:
+                    logger.warning("ClassWallet could not read the uploaded file - continuing with manual process")
+                    self.driver.find_element(By.XPATH, manual_process_xpath).click()
+                    wait_30s.until(lambda d: 'manage-expenses' in d.current_url)
+                    logger.info("✓ Landed on Manage Expenses step via manual process")
             except Exception as e:
                 logger.error(f"Did not reach Manage Expenses step after upload: {str(e)}")
                 self._log_error_with_context("upload_wizard_invoice", e)
                 return False
 
-            logger.info("✓ Invoice uploaded and scanned successfully")
+            logger.info("✓ Invoice uploaded successfully")
             return True
 
         except Exception as e:
