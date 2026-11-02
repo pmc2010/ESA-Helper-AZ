@@ -9,6 +9,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.common.exceptions import TimeoutException
 import time
 import logging
 import platform
@@ -243,6 +245,45 @@ class ClassWalletAutomation:
             self._log_error_with_context("ClassWallet Login", e)
             return False
 
+    def _is_student_name_displayed(self, full_name: str) -> bool:
+        """
+        Return True if the student's name is visibly shown on the page (i.e. in the
+        header as the active user), ignoring copies inside hidden dropdown menus.
+        Matches any element with a text node containing the name, not just <span>s.
+        """
+        try:
+            elements = self.driver.find_elements(
+                By.XPATH, f"//*[text()[contains(., '{full_name}')]]"
+            )
+            logger.info(f"Found {len(elements)} element(s) containing '{full_name}'")
+
+            for i, elem in enumerate(elements):
+                is_displayed = elem.is_displayed()
+                logger.info(f"  Element {i+1} <{elem.tag_name}>: displayed={is_displayed}")
+                if not is_displayed:
+                    continue
+
+                # Skip copies inside an explicitly hidden dropdown/menu
+                is_hidden = False
+                try:
+                    for parent in elem.find_elements(By.XPATH, "ancestor::*")[-5:]:  # nearest 5
+                        parent_classes = (parent.get_attribute("class") or "").lower()
+                        parent_style = (parent.get_attribute("style") or "").lower()
+                        if any(x in parent_classes for x in ['d-none', 'hidden', 'invisible']) \
+                                or 'display: none' in parent_style:
+                            is_hidden = True
+                            break
+                except Exception:
+                    pass  # Inconclusive - treat as the visible instance
+
+                if is_hidden:
+                    logger.info(f"    Element {i+1} is in a hidden menu, skipping")
+                    continue
+                return True
+        except Exception as e:
+            logger.info(f"Exception during student check: {str(e)}")
+        return False
+
     def select_student(self, student_name: str):
         """
         Select a student from the dropdown
@@ -270,71 +311,24 @@ class ClassWalletAutomation:
             full_name = name_mapping.get(student_name, student_name)
             logger.info(f"Looking for: {full_name}")
 
-            # Step 0: Check if student is already selected (appears in top-right corner)
-            logger.info("\n0. Checking if student is already selected...")
-            try:
-                # Look for the student name in the header area (top-right)
-                # Check for visible instances (not hidden in dropdown menus)
-                student_elements = self.driver.find_elements(
-                    By.XPATH, f"//span[contains(text(), '{full_name}')]"
-                )
-
-                logger.info(f"Found {len(student_elements)} element(s) containing '{full_name}'")
-
-                # If we found the student name, check if it's visible (not hidden in a dropdown)
-                for i, elem in enumerate(student_elements):
-                    is_displayed = elem.is_displayed()
-                    logger.info(f"  Element {i+1}: displayed={is_displayed}")
-
-                    if is_displayed:
-                        # Check if this element is NOT inside a hidden dropdown/menu
-                        try:
-                            # Check if any parent element is actually hidden
-                            parents = elem.find_elements(By.XPATH, "ancestor::*")
-                            is_hidden = False
-
-                            for parent in parents[:5]:  # Check first 5 parent levels
-                                parent_classes = parent.get_attribute("class") or ""
-                                parent_style = parent.get_attribute("style") or ""
-
-                                # Check for explicit hidden indicators
-                                if any(x in parent_classes.lower() for x in ['d-none', 'hidden', 'invisible']):
-                                    is_hidden = True
-                                    logger.info(f"    Element {i+1}: Found hidden class in parent")
-                                    break
-                                if 'display: none' in parent_style.lower():
-                                    is_hidden = True
-                                    logger.info(f"    Element {i+1}: Found display:none in parent style")
-                                    break
-
-                            if is_hidden:
-                                logger.info(f"    Element {i+1} is in a hidden menu, skipping")
-                                continue
-
-                            # If we get here, the element is visible and not hidden
-                            logger.info(f"✓ Student {full_name} is already selected!")
-                            logger.info(f"Student selection complete (no action needed)")
-                            return True
-
-                        except Exception as parent_check_error:
-                            # If we can't determine parent structure, assume it's the visible one
-                            logger.info(f"    Parent check inconclusive, assuming this is the visible instance")
-                            logger.info(f"✓ Student {full_name} is already selected!")
-                            logger.info(f"Student selection complete (no action needed)")
-                            return True
-
-                logger.info("Student not currently selected, will open dropdown...")
-            except Exception as e:
-                # Student not already selected, proceed with dropdown selection
-                logger.info(f"Exception during student check: {str(e)}")
-                logger.info("Student not currently selected, will open dropdown...")
-                pass
-
-            # Step 1: Click the menu button to open the student dropdown
-            logger.info("\n1. Opening student selector menu...")
+            # Login only waits for <body>, so wait for the header (which holds both the
+            # current student's name and the menu button) to render before checking -
+            # otherwise the name isn't on the page yet and we wrongly try to switch users
             menu_button = self.wait.until(
                 EC.element_to_be_clickable((By.ID, "openMenu"))
             )
+            time.sleep(1)
+
+            # Step 0: Check if student is already selected (appears in top-right corner)
+            logger.info("\n0. Checking if student is already selected...")
+            if self._is_student_name_displayed(full_name):
+                logger.info(f"✓ Student {full_name} is already selected!")
+                logger.info(f"Student selection complete (no action needed)")
+                return True
+            logger.info("Student not currently selected, will open dropdown...")
+
+            # Step 1: Click the menu button to open the student dropdown
+            logger.info("\n1. Opening student selector menu...")
             menu_button.click()
             logger.info("✓ Menu opened")
 
@@ -354,11 +348,24 @@ class ClassWalletAutomation:
 
             # Step 3: Click on the student's name
             logger.info(f"3. Selecting student: {full_name}")
-            student_item = self.wait.until(
-                EC.element_to_be_clickable(
-                    (By.XPATH, f"//span[contains(text(), '{full_name}')]/parent::div/parent::li")
+            try:
+                student_item = self.wait.until(
+                    EC.element_to_be_clickable(
+                        (By.XPATH, f"//span[contains(text(), '{full_name}')]/parent::div/parent::li")
+                    )
                 )
-            )
+            except TimeoutException:
+                # "Switch to user" omits the currently-active user, so a student missing
+                # from the list may just mean they're already selected - close the menu
+                # and re-check the header before giving up
+                logger.info(f"  {full_name} not in 'Switch to user' list, re-checking if already selected...")
+                ActionChains(self.driver).send_keys(Keys.ESCAPE).perform()
+                time.sleep(0.5)
+                if self._is_student_name_displayed(full_name):
+                    logger.info(f"✓ Student {full_name} is already selected!")
+                    logger.info(f"Student selection complete (no action needed)")
+                    return True
+                raise
             student_item.click()
             logger.info(f"✓ Student {full_name} selected")
 
@@ -782,7 +789,8 @@ class ClassWalletAutomation:
         then handle ClassWallet's Intelligent Document Processing (IDP) scan, which replaced
         the old "resize/rotate -> Save" image editor modal with a "Scan Receipt" button
         (same underlying data-test='Save' selector - see handle_image_editor_modal()).
-        Scanning auto-advances to step 2 ("Manage Expenses") when done.
+        Scanning auto-advances to step 2 ("Manage Expenses") when done; if the scan fails,
+        "Continue with manual process" is clicked to reach the same step with blank fields.
 
         Args:
             file_paths: Dictionary of {file_type: file_path} OR {file_type: {name, path, size}}
@@ -826,15 +834,27 @@ class ClassWalletAutomation:
             # IDP scanning takes a few seconds and auto-advances to step 2 when done
             logger.info("4. Waiting for Intelligent Document Processing (IDP) scan to complete...")
             try:
+                # If IDP can't parse the file it stays on this step and shows an "Unable to
+                # Read Invoice or Receipt" error instead of advancing. Manual entry leads to
+                # the same Manage Expenses page, whose fill step already handles blank fields.
+                manual_process_xpath = "//button[contains(., 'Continue with manual process')]"
                 wait_30s = WebDriverWait(self.driver, 30)
-                wait_30s.until(lambda d: 'manage-expenses' in d.current_url)
-                logger.info("✓ IDP scan complete, landed on Manage Expenses step")
+                wait_30s.until(lambda d: 'manage-expenses' in d.current_url
+                               or d.find_elements(By.XPATH, manual_process_xpath))
+
+                if 'manage-expenses' in self.driver.current_url:
+                    logger.info("✓ IDP scan complete, landed on Manage Expenses step")
+                else:
+                    logger.warning("ClassWallet could not read the uploaded file - continuing with manual process")
+                    self.driver.find_element(By.XPATH, manual_process_xpath).click()
+                    wait_30s.until(lambda d: 'manage-expenses' in d.current_url)
+                    logger.info("✓ Landed on Manage Expenses step via manual process")
             except Exception as e:
                 logger.error(f"Did not reach Manage Expenses step after upload: {str(e)}")
                 self._log_error_with_context("upload_wizard_invoice", e)
                 return False
 
-            logger.info("✓ Invoice uploaded and scanned successfully")
+            logger.info("✓ Invoice uploaded successfully")
             return True
 
         except Exception as e:
