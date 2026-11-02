@@ -241,9 +241,9 @@ Pre-approved vendors for Direct Pay:
 
 ```json
 {
-  "id": "alta_climbing_gym",
-  "name": "Alta Climbing Gym LLC",
-  "location": "AZ, Gilbert"
+  "id": "test_vendor",
+  "name": "Test Vendor LLC",
+  "location": "AZ, Test City"
 }
 ```
 

@@ -1050,7 +1050,7 @@ class ClassWalletAutomation:
 
         IDP can split a Direct Pay invoice into multiple rows too (observed with a multi-line
         vendor invoice - "ESA Member", "Vendor Pay EFT", and "Subscription Billing" line items
-        from a single Alta Climbing invoice), not just Reimbursement receipts as originally
+        from a single invoice), not just Reimbursement receipts as originally
         assumed. Since ESA Helper's own form only models one lump-sum amount/category per
         submission, extra rows are collapsed the same way Reimbursement does, and shipping/
         discount/tax are zeroed so the line item's total matches the submitted amount exactly.
@@ -1138,8 +1138,8 @@ class ClassWalletAutomation:
 
                 # rows[0].total is a separate field from price/quantity, not derived from
                 # them client-side - it keeps whatever IDP scanned unless overwritten
-                # explicitly (observed: price overwritten to $77.02 but total silently
-                # stayed at IDP's original $74.00, which is what fed the Subtotal/Total).
+                # explicitly (observed: price overwritten correctly but total silently
+                # stayed at IDP's original scanned value, which is what fed the Subtotal/Total).
                 total_field = self.driver.find_element(By.NAME, "rows[0].total")
                 self._force_set_field_value(total_field, str(amount))
 
